@@ -129,10 +129,10 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
   const [statuses, setStatuses] = useState<FileStatus[]>([]);
   // Espelho síncrono do statuses pra ler estado fresco dentro de promises
   // do pool de upload (setState é assíncrono e o cálculo final fica errado).
+  // ⚠ Atualizado dentro de setStatusAt em vez de useEffect — useEffect só
+  // roda depois do commit, deixando o ref stale quando o pool termina antes
+  // do React commitar (causa: toast "nenhum anexo enviado" mesmo com sucesso).
   const statusesRef = useRef<FileStatus[]>([]);
-  useEffect(() => {
-    statusesRef.current = statuses;
-  }, [statuses]);
   // Pool de AbortControllers por arquivo, pra cancelar upload em curso.
   const abortRefs = useRef<Map<number, AbortController>>(new Map());
   const [activeIndex, setActiveIndex] = useState(0);
@@ -241,14 +241,14 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
       ...prev,
       ...dentroDoTotal.map(() => ({ ...EMPTY_EDIT })),
     ]);
-    setStatuses((prev) => [
-      ...prev,
-      ...dentroDoTotal.map(() => "queued" as FileStatus),
-    ]);
+    const novosStatus = dentroDoTotal.map(() => "queued" as FileStatus);
+    statusesRef.current = [...statusesRef.current, ...novosStatus];
+    setStatuses((prev) => [...prev, ...novosStatus]);
   }
 
   function reset() {
     abortAllUploads();
+    statusesRef.current = [];
     setFiles([]);
     setEditStates([]);
     setStatuses([]);
@@ -259,6 +259,7 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
 
   function removeAt(i: number) {
     if (pending) return;
+    statusesRef.current = statusesRef.current.filter((_, idx) => idx !== i);
     setFiles((prev) => prev.filter((_, idx) => idx !== i));
     setEditStates((prev) => prev.filter((_, idx) => idx !== i));
     setStatuses((prev) => prev.filter((_, idx) => idx !== i));
@@ -361,6 +362,11 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
   /* ─── Pool de upload concorrente ─── */
 
   function setStatusAt(i: number, s: FileStatus) {
+    // Atualiza o ref SINCRONAMENTE pra que leituras subsequentes dentro
+    // do pool/Promise.all vejam o estado real (setStatuses é assíncrono).
+    const nextRef = [...statusesRef.current];
+    nextRef[i] = s;
+    statusesRef.current = nextRef;
     setStatuses((prev) => {
       if (prev[i] === s) return prev;
       const next = [...prev];
@@ -451,11 +457,27 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
     }
 
     startTransition(async () => {
-      // Reset de status: tudo vira queued.
-      setStatuses(files.map(() => "queued"));
+      // Idempotência: só faz upload do que NÃO está done. Evita duplicar se
+      // o user clicar "Enviar" de novo depois de um sucesso (ex.: toast
+      // mostrou erro espúrio e ele tentou outra vez).
+      const current = statusesRef.current;
+      const targets = files
+        .map((_, i) => i)
+        .filter((i) => (current[i] ?? "queued") !== "done");
+
+      if (targets.length === 0) {
+        toast.info("Todos os anexos já foram enviados");
+        return;
+      }
+
+      // Reset status apenas dos targets (preserva os done).
+      const resetNext = [...current];
+      for (const i of targets) resetNext[i] = "queued";
+      statusesRef.current = resetNext;
+      setStatuses(resetNext);
 
       // Pool de workers concorrentes.
-      const queue = files.map((_, i) => i);
+      const queue = [...targets];
       const pool: Promise<void>[] = [];
       const runNext = (): Promise<void> | null => {
         const i = queue.shift();
@@ -466,7 +488,7 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
         });
       };
 
-      for (let n = 0; n < Math.min(CONCURRENCY, files.length); n++) {
+      for (let n = 0; n < Math.min(CONCURRENCY, targets.length); n++) {
         const t = runNext();
         if (t) pool.push(t);
       }
