@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import {
   Camera,
   Paperclip,
@@ -10,6 +17,8 @@ import {
   AlertCircle,
   Plus,
   Check,
+  Loader2,
+  Image as ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -41,11 +50,22 @@ import { getCroppedBlob } from "@/lib/utils/crop-image";
 import { ImageEditor, type ImageEditState } from "./ImageEditor";
 import { cn } from "@/lib/utils";
 
+/* ─────────── Constantes ─────────── */
+
 const FIELD_LABEL = "text-[11px] uppercase tracking-editorial text-ash";
 const FIELD_INPUT =
   "bg-paper-soft border-hairline focus-visible:border-cobalt focus-visible:ring-0";
 
-// Tipos que precisam OBRIGATORIAMENTE de data de referência
+// Limites do lote — generosos pra plantão real, mas evitam acidentes.
+const MAX_FILES_PER_BATCH = 25;
+const MAX_FILE_MB = 50;
+const MAX_BATCH_MB = 300;
+// Imagens menores que isso e sem edição: sobem cruas (skip do canvas).
+const COMPRESS_SKIP_MB = 1.5;
+// Quantos arquivos em paralelo. 3 é um sweet spot — paraleliza rede sem
+// triplicar pico de memória da compressão.
+const CONCURRENCY = 3;
+
 const TIPO_REQUER_DATA: TipoAnexo[] = [
   "EXAME_LABORATORIAL",
   "EXAME_IMAGEM",
@@ -55,7 +75,6 @@ const TIPO_REQUER_DATA: TipoAnexo[] = [
   "BOLETIM_NEURO",
 ];
 
-// Ordem de exibição: primários (mencionados pelo pesquisador) → resto
 const TIPO_ORDER: TipoAnexo[] = [
   "EXAME_LABORATORIAL",
   "HGT",
@@ -70,44 +89,70 @@ const TIPO_ORDER: TipoAnexo[] = [
 
 const EMPTY_EDIT: ImageEditState = { appliedCrop: null, rotation: 0 };
 
-function isImageFile(f: File) {
-  return f.type.startsWith("image/") || isHeicFile(f);
-}
-function isPdfFile(f: File) {
-  return f.type === "application/pdf";
-}
-/**
- * HEIC (iPhone) não tem decoder em Chrome/Firefox/Edge — canvas não consegue
- * ler. Detecta por mime OU extensão e desvia do pipeline de
- * crop/rotação/compressão, subindo o arquivo cru direto pro Storage.
- */
+type FileStatus = "queued" | "uploading" | "done" | "error";
+
+/* ─────────── Detecção de tipo ─────────── */
+
 function isHeicFile(f: File) {
   if (/^image\/hei[cf]/i.test(f.type)) return true;
   return /\.(hei[cf])$/i.test(f.name);
 }
+function isImageFile(f: File) {
+  if (f.type.startsWith("image/")) return true;
+  if (isHeicFile(f)) return true;
+  // Algumas câmeras Android salvam sem mime — checa extensão.
+  return /\.(jpe?g|png|gif|webp|avif|tiff?|bmp|heic|heif)$/i.test(f.name);
+}
+function isPdfFile(f: File) {
+  if (f.type === "application/pdf") return true;
+  return /\.pdf$/i.test(f.name);
+}
+function isEditableImage(f: File) {
+  // Só dá pra editar (crop/rotação) o que o canvas decodifica.
+  if (isHeicFile(f)) return false;
+  return f.type.startsWith("image/");
+}
+function fmtSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/* ─────────── Componente principal ─────────── */
 
 export function AnexoUploader({ paciente }: { paciente: Paciente }) {
   const router = useRouter();
   const [files, setFiles] = useState<File[]>([]);
   const [editStates, setEditStates] = useState<ImageEditState[]>([]);
+  const [statuses, setStatuses] = useState<FileStatus[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [tipo, setTipo] = useState<TipoAnexo | "">("");
   const [dataRef, setDataRef] = useState(format(new Date(), "yyyy-MM-dd"));
   const [descricao, setDescricao] = useState("");
-  const [progress, setProgress] = useState(0);
-  const [currentIdx, setCurrentIdx] = useState(0); // 1-based em uso, 0 = nada
   const [pending, startTransition] = useTransition();
   const cameraInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const addMoreInput = useRef<HTMLInputElement>(null);
 
   const activeFile = files[activeIndex] ?? null;
-  const activeIsImage = activeFile ? isImageFile(activeFile) : false;
+  const activeIsEditable = activeFile ? isEditableImage(activeFile) : false;
   const activeIsPdf = activeFile ? isPdfFile(activeFile) : false;
+  const activeIsRawImage =
+    activeFile && isImageFile(activeFile) && !isEditableImage(activeFile);
 
   const requerData = useMemo(
     () => tipo !== "" && TIPO_REQUER_DATA.includes(tipo as TipoAnexo),
     [tipo],
+  );
+
+  const totalBytes = useMemo(
+    () => files.reduce((acc, f) => acc + f.size, 0),
+    [files],
+  );
+
+  const doneCount = useMemo(
+    () => statuses.filter((s) => s === "done").length,
+    [statuses],
   );
 
   const podeEnviar = useMemo(() => {
@@ -117,47 +162,95 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
     return !pending;
   }, [files.length, tipo, requerData, dataRef, pending]);
 
+  /* ─── Aceitar arquivos com validação ─── */
+
   function acceptFiles(list: FileList | null) {
     if (!list || list.length === 0) return;
     const incoming: File[] = [];
-    let rejected = 0;
+    const rejeitados: string[] = [];
+
     for (const f of Array.from(list)) {
-      if (isImageFile(f) || isPdfFile(f)) incoming.push(f);
-      else rejected++;
+      // Tipo
+      if (!isImageFile(f) && !isPdfFile(f)) {
+        rejeitados.push(`${f.name}: formato não suportado`);
+        continue;
+      }
+      // Tamanho individual
+      if (f.size > MAX_FILE_MB * 1024 * 1024) {
+        rejeitados.push(
+          `${f.name}: ${fmtSize(f.size)} (máx. ${MAX_FILE_MB} MB)`,
+        );
+        continue;
+      }
+      incoming.push(f);
     }
-    if (rejected > 0) {
-      toast.error(`${rejected} arquivo(s) ignorado(s)`, {
-        description: "Só JPG/PNG/HEIC e PDF.",
-      });
+
+    // Limite de quantidade
+    const espacoRestante = MAX_FILES_PER_BATCH - files.length;
+    if (incoming.length > espacoRestante) {
+      const cortar = incoming.length - espacoRestante;
+      const cortados = incoming.splice(espacoRestante);
+      rejeitados.push(
+        ...cortados.map((c) => `${c.name}: lote cheio (máx. ${MAX_FILES_PER_BATCH})`),
+      );
+      void cortar;
     }
-    if (incoming.length === 0) return;
+
+    // Limite de tamanho total
+    let bytesAcumulados = totalBytes;
+    const dentroDoTotal: File[] = [];
+    for (const f of incoming) {
+      if (bytesAcumulados + f.size > MAX_BATCH_MB * 1024 * 1024) {
+        rejeitados.push(
+          `${f.name}: ultrapassa total do lote (máx. ${MAX_BATCH_MB} MB)`,
+        );
+        continue;
+      }
+      bytesAcumulados += f.size;
+      dentroDoTotal.push(f);
+    }
+
+    if (rejeitados.length > 0) {
+      toast.error(
+        rejeitados.length === 1
+          ? "1 arquivo rejeitado"
+          : `${rejeitados.length} arquivos rejeitados`,
+        {
+          description: rejeitados.slice(0, 3).join(" · "),
+          duration: 5000,
+        },
+      );
+    }
+    if (dentroDoTotal.length === 0) return;
 
     setFiles((prev) => {
-      const next = [...prev, ...incoming];
-      // primeira leva → ativa o primeiro; lote adicional → mantém ativo atual
       if (prev.length === 0) setActiveIndex(0);
-      return next;
+      return [...prev, ...dentroDoTotal];
     });
     setEditStates((prev) => [
       ...prev,
-      ...incoming.map(() => ({ ...EMPTY_EDIT })),
+      ...dentroDoTotal.map(() => ({ ...EMPTY_EDIT })),
     ]);
-    setProgress(0);
+    setStatuses((prev) => [
+      ...prev,
+      ...dentroDoTotal.map(() => "queued" as FileStatus),
+    ]);
   }
 
   function reset() {
     setFiles([]);
     setEditStates([]);
+    setStatuses([]);
     setActiveIndex(0);
     setTipo("");
     setDescricao("");
-    setProgress(0);
-    setCurrentIdx(0);
   }
 
   function removeAt(i: number) {
+    if (pending) return;
     setFiles((prev) => prev.filter((_, idx) => idx !== i));
     setEditStates((prev) => prev.filter((_, idx) => idx !== i));
+    setStatuses((prev) => prev.filter((_, idx) => idx !== i));
     setActiveIndex((prev) => {
       if (prev === i) return Math.max(0, i - 1);
       if (prev > i) return prev - 1;
@@ -165,9 +258,6 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
     });
   }
 
-  // useCallback é crítico aqui — o ImageEditor tem onStateChange nas deps
-  // de um useEffect, então uma nova referência a cada render dispararia
-  // loop infinito de re-render.
   const updateActiveEdit = useCallback(
     (state: ImageEditState) => {
       setEditStates((prev) => {
@@ -187,50 +277,119 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
     [activeIndex],
   );
 
+  /* ─── Pipeline por arquivo ─── */
+
   async function processOne(
     f: File,
     edit: ImageEditState,
   ): Promise<{ blob: File | Blob; mimeType: string; outName: string }> {
-    // HEIC ou PDF: sobe cru. iPhone HEIC já é comprimido e nem decodifica
-    // no canvas dos browsers não-Safari.
-    if (isHeicFile(f) || !f.type.startsWith("image/")) {
-      const mimeType =
-        f.type ||
-        (isHeicFile(f)
-          ? /\.heif$/i.test(f.name)
-            ? "image/heif"
-            : "image/heic"
-          : "application/octet-stream");
-      return { blob: f, mimeType, outName: f.name };
+    const hasEdit = edit.appliedCrop !== null || edit.rotation !== 0;
+
+    // PDF: passa direto.
+    if (isPdfFile(f)) {
+      return {
+        blob: f,
+        mimeType: f.type || "application/pdf",
+        outName: f.name,
+      };
     }
 
-    let toUpload: File | Blob = f;
-    let outName = f.name;
-    let outType = f.type;
+    // HEIC ou imagem que o canvas não decodifica: sobe cru.
+    if (!isEditableImage(f)) {
+      const mime =
+        f.type ||
+        (isHeicFile(f) ? (/\.heif$/i.test(f.name) ? "image/heif" : "image/heic") : "application/octet-stream");
+      return { blob: f, mimeType: mime, outName: f.name };
+    }
 
-    const precisaEditar = edit.appliedCrop !== null || edit.rotation !== 0;
-    if (precisaEditar) {
+    let blob: File | Blob = f;
+    let outName = f.name;
+    let mime = f.type || "image/jpeg";
+
+    if (hasEdit) {
       const url = URL.createObjectURL(f);
       try {
-        toUpload = await getCroppedBlob(url, edit.appliedCrop, edit.rotation, 0.92);
+        blob = await getCroppedBlob(url, edit.appliedCrop, edit.rotation, 0.92);
         outName = f.name.replace(/\.[^.]+$/, "") + ".jpg";
-        outType = "image/jpeg";
+        mime = "image/jpeg";
       } finally {
         URL.revokeObjectURL(url);
       }
     }
 
-    // Compressão é best-effort — se falhar (formato exótico, browser sem
-    // suporte, etc.) cai pro upload do arquivo original.
+    // Skip de compressão pra arquivos já pequenos sem edição — sem ganho real
+    // e poupa CPU/memória do mobile.
+    if (!hasEdit && blob.size <= COMPRESS_SKIP_MB * 1024 * 1024) {
+      return { blob, mimeType: mime, outName };
+    }
+
+    // Compressão best-effort.
     try {
       const compressed = await imageCompression(
-        new File([toUpload], outName, { type: outType }),
+        new File([blob], outName, { type: mime }),
         { maxSizeMB: 1.5, maxWidthOrHeight: 1920, useWebWorker: true },
       );
-      return { blob: compressed, mimeType: compressed.type || outType, outName };
-    } catch (compressErr) {
-      console.warn("[anexo] compressão falhou, subindo original:", compressErr);
-      return { blob: toUpload, mimeType: outType, outName };
+      return {
+        blob: compressed,
+        mimeType: compressed.type || mime,
+        outName,
+      };
+    } catch (err) {
+      console.warn("[anexo] compressão falhou, subindo original:", err);
+      return { blob, mimeType: mime, outName };
+    }
+  }
+
+  /* ─── Pool de upload concorrente ─── */
+
+  function setStatusAt(i: number, s: FileStatus) {
+    setStatuses((prev) => {
+      if (prev[i] === s) return prev;
+      const next = [...prev];
+      next[i] = s;
+      return next;
+    });
+  }
+
+  async function uploadOne(i: number) {
+    const f = files[i];
+    const edit = editStates[i] ?? EMPTY_EDIT;
+    setStatusAt(i, "uploading");
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const { blob, mimeType, outName } = await processOne(f, edit);
+      const path = buildStoragePath({
+        paciente_id: paciente.id,
+        tipo_anexo: tipo as TipoAnexo,
+        data_referencia: dataRef || null,
+        filename: outName,
+      });
+      const { error: upErr } = await supabase.storage
+        .from("anexos-tce")
+        .upload(path, blob, {
+          contentType: mimeType || "application/octet-stream",
+          upsert: false,
+        });
+      if (upErr) throw upErr;
+      const { error: insertErr } = await supabase.from("anexos").insert({
+        paciente_id: paciente.id,
+        plantao_id: paciente.plantao_id,
+        storage_path: path,
+        tipo_anexo: tipo,
+        data_referencia: dataRef || null,
+        descricao: descricao || null,
+        mime_type: mimeType || "application/octet-stream",
+        tamanho_bytes: blob.size,
+        enviado_por: user?.id ?? null,
+      });
+      if (insertErr) throw insertErr;
+      setStatusAt(i, "done");
+    } catch (err) {
+      console.error(`[anexo] ${f.name} falhou:`, err);
+      setStatusAt(i, "error");
     }
   }
 
@@ -242,83 +401,92 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
     }
 
     startTransition(async () => {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      const total = files.length;
-      let enviados = 0;
-      const erros: { name: string; err: string }[] = [];
+      // Reset de status: tudo vira queued.
+      setStatuses(files.map(() => "queued"));
 
-      try {
-        for (let i = 0; i < files.length; i++) {
-          const f = files[i];
-          const edit = editStates[i] ?? EMPTY_EDIT;
-          setCurrentIdx(i + 1);
-          setProgress(Math.round(((i) / total) * 100));
+      // Pool de workers concorrentes.
+      const queue = files.map((_, i) => i);
+      const pool: Promise<void>[] = [];
+      const runNext = (): Promise<void> | null => {
+        const i = queue.shift();
+        if (i === undefined) return null;
+        return uploadOne(i).then(() => {
+          const next = runNext();
+          if (next) return next;
+        });
+      };
 
-          try {
-            const { blob, mimeType, outName } = await processOne(f, edit);
-            const path = buildStoragePath({
-              paciente_id: paciente.id,
-              tipo_anexo: tipo as TipoAnexo,
-              data_referencia: dataRef || null,
-              filename: outName,
-            });
+      for (let n = 0; n < Math.min(CONCURRENCY, files.length); n++) {
+        const t = runNext();
+        if (t) pool.push(t);
+      }
+      await Promise.all(pool);
 
-            const { error: upErr } = await supabase.storage
-              .from("anexos-tce")
-              .upload(path, blob, {
-                contentType: mimeType || "application/octet-stream",
-                upsert: false,
-              });
-            if (upErr) throw upErr;
+      // Calcula resultado lendo o estado mais recente via callback.
+      setStatuses((curr) => {
+        const ok = curr.filter((s) => s === "done").length;
+        const err = curr.filter((s) => s === "error").length;
+        const total = curr.length;
 
-            const { error: insertErr } = await supabase.from("anexos").insert({
-              paciente_id: paciente.id,
-              plantao_id: paciente.plantao_id,
-              storage_path: path,
-              tipo_anexo: tipo,
-              data_referencia: dataRef || null,
-              descricao: descricao || null,
-              mime_type: mimeType || "application/octet-stream",
-              tamanho_bytes: blob.size,
-              enviado_por: user?.id ?? null,
-            });
-            if (insertErr) throw insertErr;
-            enviados++;
-          } catch (err) {
-            erros.push({ name: f.name, err: String(err) });
-          }
-        }
-
-        setProgress(100);
-        if (enviados > 0 && erros.length === 0) {
+        if (ok > 0 && err === 0) {
           toast.success(
-            total === 1 ? "Anexo enviado" : `${enviados} anexos enviados`,
+            total === 1 ? "Anexo enviado" : `${ok} anexos enviados`,
           );
-          reset();
-          router.refresh();
-        } else if (enviados > 0 && erros.length > 0) {
-          toast.warning(`${enviados}/${total} enviados`, {
-            description: `${erros.length} falharam — ${erros[0].name}`,
+          // Limpa o drawer depois de um respiro pra animação dos ✓
+          setTimeout(() => {
+            reset();
+            router.refresh();
+          }, 600);
+        } else if (ok > 0 && err > 0) {
+          toast.warning(`${ok}/${total} enviados`, {
+            description: `${err} falharam — toque nos arquivos em vermelho pra reenviar`,
+            duration: 6000,
           });
           router.refresh();
         } else {
           toast.error("Nenhum anexo enviado", {
-            description: erros[0]?.err ?? "Erro desconhecido.",
+            description: "Verifique sua conexão e tente de novo.",
           });
         }
-      } finally {
-        setCurrentIdx(0);
-      }
+        return curr;
+      });
     });
   }
 
+  /* ─── Reenviar só os que falharam ─── */
+
+  async function retryFalhos() {
+    const idxs = statuses
+      .map((s, i) => (s === "error" ? i : -1))
+      .filter((i) => i >= 0);
+    if (idxs.length === 0) return;
+
+    startTransition(async () => {
+      idxs.forEach((i) => setStatusAt(i, "queued"));
+      const queue = [...idxs];
+      const pool: Promise<void>[] = [];
+      const runNext = (): Promise<void> | null => {
+        const i = queue.shift();
+        if (i === undefined) return null;
+        return uploadOne(i).then(() => {
+          const next = runNext();
+          if (next) return next;
+        });
+      };
+      for (let n = 0; n < Math.min(CONCURRENCY, idxs.length); n++) {
+        const t = runNext();
+        if (t) pool.push(t);
+      }
+      await Promise.all(pool);
+      router.refresh();
+    });
+  }
+
+  const erroCount = statuses.filter((s) => s === "error").length;
   const editorTitle =
     files.length <= 1
       ? "Rotular anexo"
-      : `Rotular lote (${files.length} arquivos)`;
+      : `Rotular lote (${files.length} arquivo${files.length === 1 ? "" : "s"})`;
 
   return (
     <>
@@ -354,7 +522,7 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
       <input
         ref={fileInput}
         type="file"
-        accept="image/*,application/pdf,.heic,.heif"
+        accept="image/*,application/pdf,.pdf,.heic,.heif,.webp,.avif,.tif,.tiff,.bmp"
         multiple
         className="hidden"
         onChange={(e) => {
@@ -365,7 +533,7 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
       <input
         ref={addMoreInput}
         type="file"
-        accept="image/*,application/pdf,.heic,.heif"
+        accept="image/*,application/pdf,.pdf,.heic,.heif,.webp,.avif,.tif,.tiff,.bmp"
         multiple
         className="hidden"
         onChange={(e) => {
@@ -381,29 +549,41 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
         <DrawerContent>
           <DrawerHeader>
             <DrawerTitle>{editorTitle}</DrawerTitle>
-            <DrawerDescription>
-              {files.length > 1
-                ? "Tipo, data e descrição valem pra todo o lote. Edite cada foto pelos thumbnails."
-                : "Tipo é obrigatório. Para exames, HGT e evolução, a data de referência também."}
+            <DrawerDescription className="flex items-center gap-2 flex-wrap">
+              {files.length > 1 ? (
+                <>
+                  <span>Tipo, data e descrição valem pro lote inteiro.</span>
+                  <span className="text-ash">·</span>
+                  <span className="font-mono text-[11px] text-graphite">
+                    {fmtSize(totalBytes)} total
+                  </span>
+                </>
+              ) : (
+                <span>
+                  Tipo é obrigatório. Para exames, HGT e evolução, a data
+                  também.
+                </span>
+              )}
             </DrawerDescription>
           </DrawerHeader>
 
           <div className="space-y-4">
-            {/* Thumb strip — aparece sempre que há arquivos pra deixar evidente que é multi */}
             {files.length > 0 && (
               <ThumbStrip
                 files={files}
                 editStates={editStates}
+                statuses={statuses}
                 activeIndex={activeIndex}
                 onActivate={setActiveIndex}
                 onRemove={removeAt}
                 onAddMore={() => addMoreInput.current?.click()}
-                disabled={pending}
+                podeAdicionar={
+                  !pending && files.length < MAX_FILES_PER_BATCH
+                }
               />
             )}
 
-            {/* Editor da foto ativa */}
-            {activeFile && activeIsImage && (
+            {activeFile && activeIsEditable && (
               <ImageEditor
                 key={activeIndex}
                 file={activeFile}
@@ -412,26 +592,11 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
               />
             )}
 
-            {activeFile && activeIsPdf && (
-              <div className="space-y-2">
-                <div className="rounded-md border border-hairline bg-paper-soft p-3 flex items-center gap-3">
-                  <div className="size-10 rounded-md bg-vermillion/15 flex items-center justify-center text-vermillion shrink-0">
-                    <FileText className="h-5 w-5" strokeWidth={1.8} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-medium text-ink truncate">{activeFile.name}</p>
-                    <p className="text-[11px] text-ash">
-                      PDF · {(activeFile.size / 1024).toFixed(0)} KB
-                    </p>
-                  </div>
-                </div>
-                <iframe
-                  src={URL.createObjectURL(activeFile)}
-                  className="w-full h-48 rounded-md border border-hairline bg-paper-soft"
-                  title="Pré-visualização do PDF"
-                />
-              </div>
+            {activeFile && activeIsRawImage && (
+              <RawImageCard file={activeFile} />
             )}
+
+            {activeFile && activeIsPdf && <PdfPreviewCard file={activeFile} />}
 
             {/* Tipo (required) */}
             <div className="space-y-2">
@@ -465,12 +630,12 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
               </Select>
               {!tipo && (
                 <p className="text-[10px] text-vermillion/80 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" /> Diga a que se refere {files.length > 1 ? "este lote" : "este documento"}.
+                  <AlertCircle className="h-3 w-3" /> Diga a que se refere{" "}
+                  {files.length > 1 ? "este lote" : "este documento"}.
                 </p>
               )}
             </div>
 
-            {/* Data — required when tipo demands */}
             <div className="space-y-2">
               <Label htmlFor="dataref" className={FIELD_LABEL}>
                 Data de referência
@@ -493,7 +658,6 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
               </p>
             </div>
 
-            {/* Descrição */}
             <div className="space-y-2">
               <Label htmlFor="desc" className={FIELD_LABEL}>
                 Descrição
@@ -511,33 +675,32 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
               />
             </div>
 
-            {progress > 0 && (
-              <div className="space-y-1">
-                <div className="h-2 rounded-full bg-paper-soft overflow-hidden">
-                  <div
-                    className="h-full bg-cobalt transition-all"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-                <p className="text-[10px] text-ash text-right font-mono">
-                  {currentIdx > 0 ? `${currentIdx}/${files.length} · ` : ""}
-                  {progress}%
-                </p>
-              </div>
+            {(pending || doneCount > 0) && (
+              <UploadProgressBar
+                done={doneCount}
+                total={files.length}
+                errors={erroCount}
+                running={pending}
+              />
             )}
           </div>
 
           <DrawerFooter>
+            {erroCount > 0 && !pending && (
+              <Button variant="outline" onClick={retryFalhos} size="lg">
+                Reenviar {erroCount} que falhou{erroCount > 1 ? "" : ""}
+              </Button>
+            )}
             <Button onClick={handleUpload} disabled={!podeEnviar} size="lg">
               <Upload className="h-4 w-4 mr-2" />
               {pending
-                ? `Enviando ${currentIdx}/${files.length}...`
+                ? `Enviando... ${doneCount}/${files.length}`
                 : files.length > 1
                   ? `Enviar ${files.length} anexos`
                   : "Enviar anexo"}
             </Button>
             <Button variant="ghost" onClick={reset} disabled={pending}>
-              Cancelar
+              {doneCount > 0 ? "Fechar" : "Cancelar"}
             </Button>
           </DrawerFooter>
         </DrawerContent>
@@ -546,26 +709,119 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
   );
 }
 
-/**
- * Strip horizontal de thumbnails. Mostra a foto ativa em destaque + um "+"
- * pra adicionar mais arquivos ao mesmo lote.
- */
+/* ─────────── Sub-componentes ─────────── */
+
+function UploadProgressBar({
+  done,
+  total,
+  errors,
+  running,
+}: {
+  done: number;
+  total: number;
+  errors: number;
+  running: boolean;
+}) {
+  const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+  return (
+    <div className="space-y-1.5">
+      <div className="relative h-2 rounded-full bg-paper-soft overflow-hidden">
+        <div
+          className={cn(
+            "absolute inset-y-0 left-0 transition-all duration-300",
+            errors > 0 ? "bg-saffron" : "bg-cobalt",
+          )}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <div className="flex items-center justify-between text-[10px] text-ash font-mono">
+        <span className="flex items-center gap-1.5">
+          {running && <Loader2 className="h-3 w-3 animate-spin text-cobalt-soft" />}
+          {done}/{total} enviado{done === 1 ? "" : "s"}
+          {errors > 0 && (
+            <span className="text-vermillion">· {errors} falhou{errors > 1 ? "" : ""}</span>
+          )}
+        </span>
+        <span>{pct}%</span>
+      </div>
+    </div>
+  );
+}
+
+function PdfPreviewCard({ file }: { file: File }) {
+  const url = useMemo(() => URL.createObjectURL(file), [file]);
+  useEffect(() => () => URL.revokeObjectURL(url), [url]);
+  return (
+    <div className="space-y-2">
+      <div className="rounded-md border border-hairline bg-paper-soft p-3 flex items-center gap-3">
+        <div className="size-10 rounded-md bg-vermillion/15 flex items-center justify-center text-vermillion shrink-0">
+          <FileText className="h-5 w-5" strokeWidth={1.8} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[13px] font-medium text-ink truncate">{file.name}</p>
+          <p className="text-[11px] text-ash">PDF · {fmtSize(file.size)}</p>
+        </div>
+      </div>
+      <iframe
+        src={url}
+        className="w-full h-48 rounded-md border border-hairline bg-paper-soft"
+        title="Pré-visualização do PDF"
+      />
+    </div>
+  );
+}
+
+function RawImageCard({ file }: { file: File }) {
+  const url = useMemo(() => URL.createObjectURL(file), [file]);
+  useEffect(() => () => URL.revokeObjectURL(url), [url]);
+  return (
+    <div className="space-y-2">
+      <div className="rounded-md border border-hairline bg-paper-soft p-3 flex items-center gap-3">
+        <div className="size-10 rounded-md bg-cobalt/15 flex items-center justify-center text-cobalt-soft shrink-0">
+          <ImageIcon className="h-5 w-5" strokeWidth={1.8} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[13px] font-medium text-ink truncate">{file.name}</p>
+          <p className="text-[11px] text-ash">
+            {(file.type || "imagem").replace("image/", "").toUpperCase()} ·{" "}
+            {fmtSize(file.size)}
+          </p>
+          <p className="text-[10px] text-ash italic mt-0.5">
+            Sobe sem edição (formato não decodificado pelo navegador).
+          </p>
+        </div>
+      </div>
+      {/* Tenta renderizar — Safari mostra HEIC, outros browsers nada. */}
+      <img
+        src={url}
+        alt=""
+        className="w-full max-h-48 object-contain rounded-md border border-hairline bg-paper-soft"
+        onError={(e) => {
+          (e.target as HTMLImageElement).style.display = "none";
+        }}
+      />
+    </div>
+  );
+}
+
 function ThumbStrip({
   files,
   editStates,
+  statuses,
   activeIndex,
   onActivate,
   onRemove,
   onAddMore,
-  disabled,
+  podeAdicionar,
 }: {
   files: File[];
   editStates: ImageEditState[];
+  statuses: FileStatus[];
   activeIndex: number;
   onActivate: (i: number) => void;
   onRemove: (i: number) => void;
   onAddMore: () => void;
-  disabled: boolean;
+  podeAdicionar: boolean;
 }) {
   return (
     <div className="-mx-1 px-1 overflow-x-auto">
@@ -575,10 +831,11 @@ function ThumbStrip({
             key={`${f.name}-${f.size}-${i}`}
             file={f}
             edited={
-              editStates[i]?.appliedCrop !== null || (editStates[i]?.rotation ?? 0) !== 0
+              editStates[i]?.appliedCrop !== null ||
+              (editStates[i]?.rotation ?? 0) !== 0
             }
+            status={statuses[i] ?? "queued"}
             active={i === activeIndex}
-            disabled={disabled}
             onActivate={() => onActivate(i)}
             onRemove={() => onRemove(i)}
           />
@@ -586,7 +843,7 @@ function ThumbStrip({
         <button
           type="button"
           onClick={onAddMore}
-          disabled={disabled}
+          disabled={!podeAdicionar}
           className={cn(
             "shrink-0 size-16 rounded-lg border-2 border-dashed border-cobalt/40 text-cobalt-soft",
             "flex flex-col items-center justify-center gap-0.5 bg-paper-soft",
@@ -606,63 +863,128 @@ function ThumbStrip({
 function ThumbItem({
   file,
   edited,
+  status,
   active,
-  disabled,
   onActivate,
   onRemove,
 }: {
   file: File;
   edited: boolean;
+  status: FileStatus;
   active: boolean;
-  disabled: boolean;
   onActivate: () => void;
   onRemove: () => void;
 }) {
+  // O URL é criado uma vez por File; só revoga quando o componente desmonta.
+  // Sem revogar no useMemo pra não invalidar a img enquanto em uso.
   const url = useMemo(() => URL.createObjectURL(file), [file]);
-  // Não revoga aqui — o objeto pode estar em uso no editor ativo.
-  // O GC do navegador resolve quando a aba fecha; trade-off aceitável.
+  useEffect(() => () => URL.revokeObjectURL(url), [url]);
+
   const isImg = isImageFile(file);
+  const isHeic = isHeicFile(file);
+  const isPdf = isPdfFile(file);
+
+  // Esconde overlays de status quando ainda está só na fila.
+  const showStatusOverlay =
+    status === "uploading" || status === "done" || status === "error";
+
   return (
     <div className="relative shrink-0">
       <button
         type="button"
         onClick={onActivate}
-        disabled={disabled}
+        disabled={status === "uploading"}
         className={cn(
           "size-16 rounded-lg overflow-hidden border-2 bg-paper-soft relative",
-          "flex items-center justify-center",
-          active
+          "flex items-center justify-center transition-colors",
+          active && status !== "error"
             ? "border-cobalt ring-2 ring-cobalt/20"
-            : "border-hairline hover:border-cobalt/50",
-          "transition-colors disabled:opacity-50",
+            : status === "error"
+              ? "border-vermillion/60 ring-2 ring-vermillion/20"
+              : status === "done"
+                ? "border-moss/60"
+                : "border-hairline hover:border-cobalt/50",
+          status === "uploading" && "opacity-90",
         )}
         aria-label={`Editar ${file.name}`}
       >
-        {isImg ? (
+        {isPdf ? (
+          <FileText className="h-6 w-6 text-vermillion" strokeWidth={1.8} />
+        ) : isImg && !isHeic ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={url} alt="" className="w-full h-full object-cover" />
+        ) : isHeic ? (
+          // HEIC só renderiza em Safari; resto cai no fallback de ícone.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={url}
+            alt=""
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              const img = e.target as HTMLImageElement;
+              img.style.display = "none";
+              const fallback = img.parentElement?.querySelector("[data-fallback]");
+              if (fallback) (fallback as HTMLElement).style.display = "flex";
+            }}
+          />
         ) : (
-          <FileText className="h-6 w-6 text-vermillion" strokeWidth={1.8} />
+          <ImageIcon className="h-6 w-6 text-ash" strokeWidth={1.8} />
         )}
-        {edited && (
+        {isHeic && (
+          <div
+            data-fallback
+            className="absolute inset-0 hidden items-center justify-center text-ash text-[8px] uppercase tracking-editorial bg-paper-soft"
+          >
+            HEIC
+          </div>
+        )}
+
+        {edited && status !== "uploading" && status !== "done" && (
           <span className="absolute bottom-0.5 right-0.5 size-4 rounded-full bg-cobalt text-white flex items-center justify-center">
             <Check className="h-2.5 w-2.5" strokeWidth={3} />
           </span>
         )}
-      </button>
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={disabled}
-        className={cn(
-          "absolute -top-1.5 -right-1.5 size-5 rounded-full bg-paper-deep border border-hairline",
-          "flex items-center justify-center text-ash hover:text-vermillion hover:border-vermillion/60",
-          "transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+
+        {showStatusOverlay && (
+          <div
+            className={cn(
+              "absolute inset-0 flex items-center justify-center",
+              status === "done" && "bg-moss/30",
+              status === "error" && "bg-vermillion/30",
+              status === "uploading" && "bg-cobalt/20",
+            )}
+          >
+            {status === "uploading" && (
+              <Loader2 className="h-5 w-5 text-white animate-spin drop-shadow" />
+            )}
+            {status === "done" && (
+              <span className="size-7 rounded-full bg-moss text-white flex items-center justify-center shadow-lg">
+                <Check className="h-4 w-4" strokeWidth={3} />
+              </span>
+            )}
+            {status === "error" && (
+              <span className="size-7 rounded-full bg-vermillion text-white flex items-center justify-center shadow-lg">
+                <X className="h-4 w-4" strokeWidth={3} />
+              </span>
+            )}
+          </div>
         )}
-        aria-label={`Remover ${file.name}`}
-      >
-        <X className="h-3 w-3" strokeWidth={2} />
       </button>
+
+      {status !== "uploading" && status !== "done" && (
+        <button
+          type="button"
+          onClick={onRemove}
+          className={cn(
+            "absolute -top-1.5 -right-1.5 size-5 rounded-full bg-paper-deep border border-hairline",
+            "flex items-center justify-center text-ash hover:text-vermillion hover:border-vermillion/60",
+            "transition-colors",
+          )}
+          aria-label={`Remover ${file.name}`}
+        >
+          <X className="h-3 w-3" strokeWidth={2} />
+        </button>
+      )}
     </div>
   );
 }
