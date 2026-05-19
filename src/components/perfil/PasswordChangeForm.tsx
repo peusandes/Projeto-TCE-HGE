@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { alterarSenha } from "@/app/(app)/perfil/actions";
-import { cn } from "@/lib/utils";
+import { cn, errMsg } from "@/lib/utils";
 
 const FIELD_LABEL = "text-[10px] uppercase tracking-editorial text-ash";
 const FIELD_INPUT =
@@ -46,7 +46,7 @@ export function PasswordChangeForm() {
         setNova("");
         setConfirmar("");
       } catch (err) {
-        toast.error("Erro ao alterar senha", { description: String(err) });
+        toast.error("Erro ao alterar senha", { description: errMsg(err) });
       }
     });
   }

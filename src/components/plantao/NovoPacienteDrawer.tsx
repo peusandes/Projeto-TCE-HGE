@@ -27,6 +27,7 @@ import {
 } from "@/lib/domain/enums";
 import { adicionarPaciente } from "@/app/(app)/plantoes/[id]/actions";
 import { ConfirmAltaDialog } from "@/components/paciente/ConfirmAltaDialog";
+import { errMsg } from "@/lib/utils";
 
 export function NovoPacienteDrawer({
   plantaoId,
@@ -99,7 +100,7 @@ export function NovoPacienteDrawer({
         );
         onClose();
       } catch (err) {
-        toast.error("Erro ao adicionar", { description: String(err) });
+        toast.error("Erro ao adicionar", { description: errMsg(err) });
       }
     });
   }

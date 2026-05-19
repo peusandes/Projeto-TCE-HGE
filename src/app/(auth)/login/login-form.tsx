@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { errMsg } from "@/lib/utils";
 
 export function LoginForm() {
   const search = useSearchParams();
@@ -28,10 +29,14 @@ export function LoginForm() {
       toast.success("Bem-vindo!");
       // Hard nav: garante refresh dos Server Components + execução de middleware
       // sem ficar preso num useTransition se a navegação tomar tempo.
-      const redirect = search.get("redirect") || "/plantoes";
-      window.location.href = redirect;
+      // Validação anti-open-redirect: só aceita paths relativos que começam
+      // com "/" mas não com "//" (que vira protocol-relative URL pra outro host).
+      const raw = search.get("redirect");
+      const safe =
+        raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/plantoes";
+      window.location.href = safe;
     } catch (err) {
-      toast.error("Erro", { description: String(err) });
+      toast.error("Erro", { description: errMsg(err) });
       setPending(false);
     }
   }

@@ -63,6 +63,7 @@ export async function salvarColetaRedcap(input: {
   paciente_id: string;
   plantao_id: string;
   instrument: InstrumentId;
+  seq: number;
   data: RedcapFormData;
   status: FormStatus;
 }) {
@@ -78,11 +79,12 @@ export async function salvarColetaRedcap(input: {
         paciente_id: input.paciente_id,
         plantao_id: input.plantao_id,
         tipo: input.instrument,
+        seq: input.seq,
         dados: input.data,
         status: input.status,
         coletado_por: user?.id ?? null,
       },
-      { onConflict: "paciente_id,tipo" },
+      { onConflict: "paciente_id,tipo,seq" },
     );
   if (error) throw new Error(error.message);
 
@@ -152,6 +154,25 @@ export async function deletarPaciente(id: string) {
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
+
+  // Antes de derrubar o paciente (cascade apaga registros de anexos),
+  // limpa os arquivos do bucket pra não deixar órfãos.
+  const { data: anexos } = await supabase
+    .from("anexos")
+    .select("storage_path")
+    .eq("paciente_id", id);
+  const paths = (anexos ?? []).map((a) => a.storage_path).filter(Boolean);
+  if (paths.length > 0) {
+    const { error: rmErr } = await supabase.storage
+      .from("anexos-tce")
+      .remove(paths);
+    // Arquivo órfão é menos grave que paciente fantasma — só warn.
+    if (rmErr) console.warn("[deletarPaciente] storage remove falhou:", rmErr.message);
+  }
+
   await supabase.from("pacientes").delete().eq("id", id);
-  if (data?.plantao_id) revalidatePath(`/plantoes/${data.plantao_id}`);
+  if (data?.plantao_id) {
+    revalidatePath(`/plantoes/${data.plantao_id}`);
+    revalidatePath("/pacientes");
+  }
 }

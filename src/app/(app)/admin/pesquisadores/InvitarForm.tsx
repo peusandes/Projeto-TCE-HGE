@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { convidarPesquisador } from "./actions";
+import { errMsg } from "@/lib/utils";
 
 const FIELD_LABEL = "text-[10px] uppercase tracking-editorial text-ash";
 const FIELD_INPUT =
@@ -35,7 +36,7 @@ export function InvitarForm() {
         setEmail("");
         setNome("");
       } catch (err) {
-        toast.error("Não foi possível convidar", { description: String(err) });
+        toast.error("Não foi possível convidar", { description: errMsg(err) });
       }
     });
   }

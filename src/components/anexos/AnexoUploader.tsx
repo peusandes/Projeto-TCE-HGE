@@ -127,6 +127,14 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
   const [files, setFiles] = useState<File[]>([]);
   const [editStates, setEditStates] = useState<ImageEditState[]>([]);
   const [statuses, setStatuses] = useState<FileStatus[]>([]);
+  // Espelho síncrono do statuses pra ler estado fresco dentro de promises
+  // do pool de upload (setState é assíncrono e o cálculo final fica errado).
+  const statusesRef = useRef<FileStatus[]>([]);
+  useEffect(() => {
+    statusesRef.current = statuses;
+  }, [statuses]);
+  // Pool de AbortControllers por arquivo, pra cancelar upload em curso.
+  const abortRefs = useRef<Map<number, AbortController>>(new Map());
   const [activeIndex, setActiveIndex] = useState(0);
   const [tipo, setTipo] = useState<TipoAnexo | "">("");
   const [dataRef, setDataRef] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -134,7 +142,6 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
   const [pending, startTransition] = useTransition();
   const cameraInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-  const addMoreInput = useRef<HTMLInputElement>(null);
 
   const activeFile = files[activeIndex] ?? null;
   const activeIsEditable = activeFile ? isEditableImage(activeFile) : false;
@@ -190,12 +197,13 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
     // Limite de quantidade
     const espacoRestante = MAX_FILES_PER_BATCH - files.length;
     if (incoming.length > espacoRestante) {
-      const cortar = incoming.length - espacoRestante;
-      const cortados = incoming.splice(espacoRestante);
+      const cortados = incoming.splice(Math.max(0, espacoRestante));
+      const podem = Math.max(0, espacoRestante);
       rejeitados.push(
-        ...cortados.map((c) => `${c.name}: lote cheio (máx. ${MAX_FILES_PER_BATCH})`),
+        ...cortados.map((c) =>
+          `${c.name}: lote cheio (cabiam ${podem}, vieram ${cortados.length + podem})`,
+        ),
       );
-      void cortar;
     }
 
     // Limite de tamanho total
@@ -240,6 +248,7 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
   }
 
   function reset() {
+    abortAllUploads();
     setFiles([]);
     setEditStates([]);
     setStatuses([]);
@@ -364,25 +373,46 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
     const f = files[i];
     const edit = editStates[i] ?? EMPTY_EDIT;
     setStatusAt(i, "uploading");
+
+    // Timeout de 90s por arquivo + suporte a cancelamento manual via reset.
+    const controller = new AbortController();
+    abortRefs.current.set(i, controller);
+    const timeoutId = setTimeout(() => controller.abort(new Error("Timeout (90s)")), 90_000);
+
     try {
       const supabase = createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
+      if (controller.signal.aborted) throw controller.signal.reason ?? new Error("Abortado");
+
       const { blob, mimeType, outName } = await processOne(f, edit);
+      if (controller.signal.aborted) throw controller.signal.reason ?? new Error("Abortado");
+
       const path = buildStoragePath({
         paciente_id: paciente.id,
         tipo_anexo: tipo as TipoAnexo,
         data_referencia: dataRef || null,
         filename: outName,
       });
-      const { error: upErr } = await supabase.storage
+
+      // Promise.race contra abort signal — supabase-js não aceita signal direto.
+      const uploadPromise = supabase.storage
         .from("anexos-tce")
         .upload(path, blob, {
           contentType: mimeType || "application/octet-stream",
           upsert: false,
         });
+      const { error: upErr } = await Promise.race([
+        uploadPromise,
+        new Promise<{ error: Error }>((_, reject) => {
+          controller.signal.addEventListener("abort", () =>
+            reject(controller.signal.reason ?? new Error("Abortado")),
+          );
+        }),
+      ]);
       if (upErr) throw upErr;
+
       const { error: insertErr } = await supabase.from("anexos").insert({
         paciente_id: paciente.id,
         plantao_id: paciente.plantao_id,
@@ -399,7 +429,18 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
     } catch (err) {
       console.error(`[anexo] ${f.name} falhou:`, err);
       setStatusAt(i, "error");
+    } finally {
+      clearTimeout(timeoutId);
+      abortRefs.current.delete(i);
     }
+  }
+
+  /** Cancela todos os uploads em curso (chamado pelo Cancelar). */
+  function abortAllUploads() {
+    for (const ctrl of abortRefs.current.values()) {
+      ctrl.abort(new Error("Cancelado pelo usuário"));
+    }
+    abortRefs.current.clear();
   }
 
   async function handleUpload() {
@@ -431,34 +472,30 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
       }
       await Promise.all(pool);
 
-      // Calcula resultado lendo o estado mais recente via callback.
-      setStatuses((curr) => {
-        const ok = curr.filter((s) => s === "done").length;
-        const err = curr.filter((s) => s === "error").length;
-        const total = curr.length;
+      // Lê do ref síncrono (setStatuses dentro de useTransition pode estar
+      // pendente — usar a callback de setStatuses pra ler era frágil).
+      const curr = statusesRef.current;
+      const ok = curr.filter((s) => s === "done").length;
+      const err = curr.filter((s) => s === "error").length;
+      const total = curr.length;
 
-        if (ok > 0 && err === 0) {
-          toast.success(
-            total === 1 ? "Anexo enviado" : `${ok} anexos enviados`,
-          );
-          // Limpa o drawer depois de um respiro pra animação dos ✓
-          setTimeout(() => {
-            reset();
-            router.refresh();
-          }, 600);
-        } else if (ok > 0 && err > 0) {
-          toast.warning(`${ok}/${total} enviados`, {
-            description: `${err} falharam — toque nos arquivos em vermelho pra reenviar`,
-            duration: 6000,
-          });
+      if (ok > 0 && err === 0) {
+        toast.success(total === 1 ? "Anexo enviado" : `${ok} anexos enviados`);
+        setTimeout(() => {
+          reset();
           router.refresh();
-        } else {
-          toast.error("Nenhum anexo enviado", {
-            description: "Verifique sua conexão e tente de novo.",
-          });
-        }
-        return curr;
-      });
+        }, 600);
+      } else if (ok > 0 && err > 0) {
+        toast.warning(`${ok}/${total} enviados`, {
+          description: `${err} falharam — toque em "Reenviar" pra tentar de novo`,
+          duration: 6000,
+        });
+        router.refresh();
+      } else {
+        toast.error("Nenhum anexo enviado", {
+          description: "Verifique sua conexão e tente de novo.",
+        });
+      }
     });
   }
 
@@ -539,17 +576,6 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
           e.target.value = "";
         }}
       />
-      <input
-        ref={addMoreInput}
-        type="file"
-        accept="image/*,application/pdf,.pdf,.heic,.heif,.webp,.avif,.tif,.tiff,.bmp"
-        multiple
-        className="hidden"
-        onChange={(e) => {
-          acceptFiles(e.target.files);
-          e.target.value = "";
-        }}
-      />
 
       <Drawer
         open={files.length > 0}
@@ -585,7 +611,7 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
                 activeIndex={activeIndex}
                 onActivate={setActiveIndex}
                 onRemove={removeAt}
-                onAddMore={() => addMoreInput.current?.click()}
+                onAddMore={() => fileInput.current?.click()}
                 podeAdicionar={
                   !pending && files.length < MAX_FILES_PER_BATCH
                 }
@@ -697,7 +723,7 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
           <DrawerFooter>
             {erroCount > 0 && !pending && (
               <Button variant="outline" onClick={retryFalhos} size="lg">
-                Reenviar {erroCount} que falhou{erroCount > 1 ? "" : ""}
+                Reenviar {erroCount} que {erroCount > 1 ? "falharam" : "falhou"}
               </Button>
             )}
             <Button onClick={handleUpload} disabled={!podeEnviar} size="lg">
@@ -708,8 +734,12 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
                   ? `Enviar ${files.length} anexos`
                   : "Enviar anexo"}
             </Button>
-            <Button variant="ghost" onClick={reset} disabled={pending}>
-              {doneCount > 0 ? "Fechar" : "Cancelar"}
+            <Button variant="ghost" onClick={reset}>
+              {pending
+                ? "Cancelar envio"
+                : doneCount > 0
+                  ? "Fechar"
+                  : "Cancelar"}
             </Button>
           </DrawerFooter>
         </DrawerContent>

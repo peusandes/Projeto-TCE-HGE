@@ -5,6 +5,7 @@ import { Lock } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { finalizarPlantao } from "@/app/(app)/plantoes/actions";
+import { errMsg } from "@/lib/utils";
 
 export function FinalizarPlantaoButton({ plantaoId }: { plantaoId: string }) {
   const [pending, startTransition] = useTransition();
@@ -15,7 +16,7 @@ export function FinalizarPlantaoButton({ plantaoId }: { plantaoId: string }) {
         await finalizarPlantao(plantaoId);
         toast.success("Plantão finalizado");
       } catch (err) {
-        toast.error("Erro ao finalizar", { description: String(err) });
+        toast.error("Erro ao finalizar", { description: errMsg(err) });
       }
     });
   }

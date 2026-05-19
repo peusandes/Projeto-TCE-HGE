@@ -11,7 +11,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, errMsg } from "@/lib/utils";
 import { RedcapForm } from "./RedcapForm";
 import { ALL_INSTRUMENTS, INSTRUMENT_TITLE } from "@/lib/redcap-schema/instruments";
 import type { FormData, FormStatus, InstrumentId } from "@/lib/redcap-schema/types";
@@ -93,7 +93,7 @@ export function RedcapTab({ paciente, coletas }: Props) {
         // Abre a nova entrada automaticamente após o refresh.
         setOpenKey(`${instrumentId}#${res.seq}`);
       } catch (err) {
-        toast.error("Não foi possível criar", { description: String(err) });
+        toast.error("Não foi possível criar", { description: errMsg(err) });
       } finally {
         setAdicionando(null);
       }

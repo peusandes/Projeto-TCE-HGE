@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { excluirPlantao } from "@/app/(app)/plantoes/actions";
+import { errMsg } from "@/lib/utils";
 
 export function ExcluirPlantaoButton({
   plantaoId,
@@ -39,7 +40,7 @@ export function ExcluirPlantaoButton({
         await excluirPlantao(plantaoId);
         // server action chama redirect — não chega aqui em sucesso
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = err instanceof Error ? err.message : errMsg(err);
         // NEXT_REDIRECT é jogado pelo redirect() — ignora.
         if (msg.includes("NEXT_REDIRECT")) return;
         toast.error("Erro ao excluir", { description: msg });

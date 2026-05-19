@@ -40,6 +40,7 @@ export async function getAnexosDoPaciente(pacienteId: string): Promise<Anexo[]> 
 }
 
 export type GroupedPacientes = {
+  pendentesAlta: Paciente[];
   admissao: Paciente[];
   seguimento: Paciente[];
   excluidos: Paciente[];
@@ -88,6 +89,7 @@ export async function listAllPacientesAgrupados(): Promise<GroupedPacientes> {
     .order("atualizado_em", { ascending: false });
   if (error) throw error;
 
+  const pendentesAlta: Paciente[] = [];
   const admissao: Paciente[] = [];
   const seguimento: Paciente[] = [];
   const excluidos: Paciente[] = [];
@@ -100,6 +102,12 @@ export async function listAllPacientesAgrupados(): Promise<GroupedPacientes> {
       historico.push(p);
       continue;
     }
+    // PENDENTE_HGE tem prioridade sobre situacao — o pesquisador precisa
+    // resolver isso antes de qualquer outra decisão clínica.
+    if (p.verificacao_alta === "PENDENTE_HGE") {
+      pendentesAlta.push(p);
+      continue;
+    }
     if (p.situacao === "EXCLUSAO") excluidos.push(p);
     else if (p.situacao === "ALTA") altaNoMapa.push(p);
     else if (p.situacao === "ADM") admissao.push(p);
@@ -107,6 +115,7 @@ export async function listAllPacientesAgrupados(): Promise<GroupedPacientes> {
   }
 
   return {
+    pendentesAlta,
     admissao,
     seguimento,
     excluidos,

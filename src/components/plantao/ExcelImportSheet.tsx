@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { parseExcelMapa, type ExcelParseResult } from "@/lib/parser/excel-mapa";
 import { bulkSeed } from "@/app/(app)/plantoes/[id]/actions";
 import { SETOR_LABEL } from "@/lib/domain/enums";
+import { errMsg } from "@/lib/utils";
 
 export function ExcelImportSheet({
   plantaoId,
@@ -38,7 +39,7 @@ export function ExcelImportSheet({
       const result = parseExcelMapa(buf);
       setParsed(result);
     } catch (err) {
-      toast.error("Erro ao ler planilha", { description: String(err) });
+      toast.error("Erro ao ler planilha", { description: errMsg(err) });
     }
   }
 
@@ -63,7 +64,7 @@ export function ExcelImportSheet({
         setFileName("");
         onClose();
       } catch (err) {
-        toast.error("Erro ao importar", { description: String(err) });
+        toast.error("Erro ao importar", { description: errMsg(err) });
       }
     });
   }

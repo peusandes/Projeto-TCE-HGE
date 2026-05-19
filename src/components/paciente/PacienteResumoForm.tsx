@@ -31,7 +31,7 @@ import { deletarPaciente, revalidarPacienteRoutes } from "@/app/(app)/pacientes/
 import { performWithSync } from "@/lib/sync/perform";
 import type { UpdatePacientePayload } from "@/lib/sync/executors";
 import type { Paciente } from "@/lib/domain/types";
-import { debounce, cn } from "@/lib/utils";
+import { debounce, cn, errMsg } from "@/lib/utils";
 import { ConfirmAltaDialog } from "./ConfirmAltaDialog";
 import { VerificacaoAltaBanner, ForaDoutoreBanner } from "./VerificacaoAltaBanner";
 
@@ -57,7 +57,20 @@ export function PacienteResumoForm({ paciente }: { paciente: Paciente }) {
     paciente.verificacao_alta,
   );
   const [, startTransition] = useTransition();
-  const firstRender = useRef(true);
+  // Snapshot inicial pra detectar mudança real (em vez de "primeiro render"
+  // que pulava o save se a primeira ação fosse marcar ALTA imediatamente).
+  const initial = useRef({
+    nome: paciente.nome,
+    leito: paciente.leito ?? "",
+    setor: paciente.setor,
+    situacao: paciente.situacao,
+    tcle: paciente.tcle_status,
+    descricao: paciente.descricao ?? "",
+    comentarios: paciente.comentarios ?? "",
+    motivo: paciente.motivo_exclusao ?? "",
+    redcapId: paciente.redcap_id ?? "",
+    verificacao: paciente.verificacao_alta,
+  });
 
   const save = useRef(
     debounce(async (patch: UpdatePacientePayload["patch"]) => {
@@ -79,7 +92,7 @@ export function PacienteResumoForm({ paciente }: { paciente: Paciente }) {
             });
           }
         } catch (err) {
-          toast.error("Erro ao salvar", { description: String(err) });
+          toast.error("Erro ao salvar", { description: errMsg(err) });
         } finally {
           setSaving(false);
         }
@@ -88,10 +101,21 @@ export function PacienteResumoForm({ paciente }: { paciente: Paciente }) {
   ).current;
 
   useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false;
-      return;
-    }
+    const ini = initial.current;
+    // Só salva se algo de fato divergiu do snapshot inicial. Cobre o caso
+    // do guard antigo (ignora mount) sem perder o primeiro toque do usuário.
+    const mudou =
+      nome !== ini.nome ||
+      leito !== ini.leito ||
+      setor !== ini.setor ||
+      situacao !== ini.situacao ||
+      tcle !== ini.tcle ||
+      descricao !== ini.descricao ||
+      comentarios !== ini.comentarios ||
+      motivo !== ini.motivo ||
+      redcapId !== ini.redcapId ||
+      verificacao !== ini.verificacao;
+    if (!mudou) return;
     save({
       nome,
       leito: leito || null,
@@ -114,7 +138,7 @@ export function PacienteResumoForm({ paciente }: { paciente: Paciente }) {
       toast.success("Paciente excluído");
       router.push(`/plantoes/${paciente.plantao_id}`);
     } catch (err) {
-      toast.error("Erro ao excluir", { description: String(err) });
+      toast.error("Erro ao excluir", { description: errMsg(err) });
     }
   }
 

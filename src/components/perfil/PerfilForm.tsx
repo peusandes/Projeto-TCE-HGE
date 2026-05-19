@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { atualizarPerfil } from "@/app/(app)/perfil/actions";
+import { errMsg } from "@/lib/utils";
 
 const FIELD_LABEL = "text-[10px] uppercase tracking-editorial text-ash";
 const FIELD_INPUT =
@@ -37,7 +38,7 @@ export function PerfilForm({ initialNome, email }: Props) {
         toast.success("Nome atualizado");
         router.refresh();
       } catch (err) {
-        toast.error("Erro ao salvar", { description: String(err) });
+        toast.error("Erro ao salvar", { description: errMsg(err) });
       }
     });
   }

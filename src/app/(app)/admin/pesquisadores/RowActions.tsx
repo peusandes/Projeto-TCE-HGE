@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { alternarAdmin, reenviarConvite, removerPesquisador } from "./actions";
 import type { PesquisadorRow } from "@/lib/data/pesquisadores";
+import { errMsg } from "@/lib/utils";
 
 export function PesquisadorRowActions({ pesquisador }: { pesquisador: PesquisadorRow }) {
   const [open, setOpen] = useState(false);
@@ -25,7 +26,7 @@ export function PesquisadorRowActions({ pesquisador }: { pesquisador: Pesquisado
         toast.success(label);
         setOpen(false);
       } catch (err) {
-        toast.error("Erro", { description: String(err) });
+        toast.error("Erro", { description: errMsg(err) });
       }
     });
   }

@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import imageCompression from "browser-image-compression";
 import { createClient } from "@/lib/supabase/client";
 import { atualizarPerfil } from "@/app/(app)/perfil/actions";
-import { cn } from "@/lib/utils";
+import { cn, errMsg } from "@/lib/utils";
 
 type Props = {
   userId: string;
@@ -45,15 +45,28 @@ export function AvatarPicker({ userId, avatarUrl }: Props) {
           console.warn("Compressão falhou, enviando original:", compressErr);
         }
 
-        // HEIC → muda extensão para refletir o que o navegador realmente vê
-        const isHeic = /\.(heic|heif)$/i.test(f.name) || /heic|heif/i.test(f.type);
-        const ext = isHeic ? "heic" : (f.name.split(".").pop()?.toLowerCase() || "jpg");
+        // Deriva a extensão do que vai EFETIVAMENTE subir, não do original.
+        // Compressão converte HEIC → JPEG mas mantém o File.name antigo;
+        // se usássemos .heic com bytes JPEG, browsers não renderizariam.
+        const finalType = (toUpload as Blob).type || f.type || "image/jpeg";
+        const ext =
+          finalType === "image/jpeg"
+            ? "jpg"
+            : finalType === "image/png"
+              ? "png"
+              : finalType === "image/webp"
+                ? "webp"
+                : finalType === "image/heic"
+                  ? "heic"
+                  : finalType === "image/heif"
+                    ? "heif"
+                    : f.name.split(".").pop()?.toLowerCase() || "jpg";
         const path = `${userId}/avatar.${ext}`;
         const supabase = createClient();
         const { error: upErr } = await supabase.storage
           .from("avatares")
           .upload(path, toUpload, {
-            contentType: (toUpload as Blob).type || f.type || "image/jpeg",
+            contentType: finalType,
             upsert: true,
           });
         if (upErr) throw new Error(upErr.message);
@@ -67,7 +80,7 @@ export function AvatarPicker({ userId, avatarUrl }: Props) {
         setPreviewUrl(null);
         router.refresh();
       } catch (err) {
-        toast.error("Erro ao salvar foto", { description: String(err) });
+        toast.error("Erro ao salvar foto", { description: errMsg(err) });
         setPreviewUrl(null);
       } finally {
         URL.revokeObjectURL(localUrl);
@@ -91,7 +104,7 @@ export function AvatarPicker({ userId, avatarUrl }: Props) {
         toast.success("Foto removida");
         router.refresh();
       } catch (err) {
-        toast.error("Erro ao remover", { description: String(err) });
+        toast.error("Erro ao remover", { description: errMsg(err) });
       }
     });
   }

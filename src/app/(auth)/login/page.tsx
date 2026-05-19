@@ -42,6 +42,17 @@ export default function LoginPage() {
           <p className="mt-8 text-center text-[10px] uppercase tracking-editorial text-ash">
             Liga Acadêmica de Neurocirurgia da Bahia
           </p>
+
+          {/* Crédito do desenvolvedor — exposto na tela de login */}
+          <div className="mt-10 flex flex-col items-center gap-1">
+            <span className="text-[9px] uppercase tracking-ultra text-ash">
+              Desenvolvido por
+            </span>
+            <span className="font-display-italic text-[13px] text-saffron">
+              Pedro Sandes Pereira
+            </span>
+            <span className="font-mono text-[10px] text-saffron/70">2026</span>
+          </div>
         </div>
       </div>
     </div>

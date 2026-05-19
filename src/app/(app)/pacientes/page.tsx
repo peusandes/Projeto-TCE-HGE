@@ -9,12 +9,23 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Pacientes — LANC TCE" };
 
 export default async function PacientesIndexPage() {
-  const { admissao, seguimento, excluidos, altaNoMapa, historico, latestPlantaoData } =
-    await listAllPacientesAgrupados();
+  const {
+    pendentesAlta,
+    admissao,
+    seguimento,
+    excluidos,
+    altaNoMapa,
+    historico,
+    latestPlantaoData,
+  } = await listAllPacientesAgrupados();
 
   const internadosCount = admissao.length + seguimento.length;
   const total =
-    internadosCount + excluidos.length + altaNoMapa.length + historico.length;
+    pendentesAlta.length +
+    internadosCount +
+    excluidos.length +
+    altaNoMapa.length +
+    historico.length;
   const latestLabel = latestPlantaoData
     ? format(new Date(latestPlantaoData + "T12:00:00"), "dd 'de' MMM", { locale: ptBR })
     : null;
@@ -31,6 +42,33 @@ export default async function PacientesIndexPage() {
       </section>
 
       {total === 0 && <EmptyState />}
+
+      {/* Possível alta — destaque máximo, exige verificação imediata no HGE */}
+      {pendentesAlta.length > 0 && (
+        <section className="space-y-3">
+          <div className="flex items-baseline gap-3">
+            <span className="font-mono text-[11px] tab-num text-saffron">
+              {String(pendentesAlta.length).padStart(2, "0")}
+            </span>
+            <div className="flex-1 h-px bg-saffron/40" />
+            <span className="text-[12px] uppercase tracking-editorial font-semibold text-saffron">
+              Possível alta — verificar no HGE
+            </span>
+            <div className="flex-1 h-px bg-saffron/40" />
+          </div>
+          <p className="text-[11px] px-1 text-graphite">
+            Confirme no prontuário digital se foi alta hospitalar ou só
+            saída do mapa Doutore.
+          </p>
+          <ul className="space-y-2">
+            {pendentesAlta.map((p) => (
+              <li key={p.id}>
+                <PacienteListItem paciente={p} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Em atendimento (com subgrupos) */}
       {internadosCount > 0 && (

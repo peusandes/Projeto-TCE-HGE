@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { completarSetup } from "./actions";
-import { cn } from "@/lib/utils";
+import { cn, errMsg } from "@/lib/utils";
 
 const FIELD_LABEL = "text-[10px] uppercase tracking-editorial text-ash";
 const FIELD_INPUT =
@@ -60,7 +60,7 @@ export function SetupForm({
         router.refresh();
       } catch (err) {
         if ((err as { digest?: string })?.digest?.startsWith("NEXT_REDIRECT")) return;
-        toast.error("Erro ao concluir cadastro", { description: String(err) });
+        toast.error("Erro ao concluir cadastro", { description: errMsg(err) });
       }
     });
   }

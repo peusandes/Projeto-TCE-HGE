@@ -65,7 +65,7 @@ export function PacienteListItem({ paciente }: { paciente: Paciente }) {
             <div className="flex items-center gap-1.5 flex-wrap mt-2">
               {isPendenteAlta && (
                 <span className="inline-flex items-center gap-1 px-2 py-[3px] rounded-full text-[10px] uppercase tracking-[0.06em] font-medium leading-none border bg-saffron/20 border-saffron/40 text-saffron">
-                  <AlertTriangle className="h-2.5 w-2.5" strokeWidth={2.4} /> Verificar alta
+                  <AlertTriangle className="h-2.5 w-2.5" strokeWidth={2.4} /> Possível alta
                 </span>
               )}
               {isForaDoutore && (

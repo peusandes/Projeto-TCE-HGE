@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { criarPlantao } from "@/app/(app)/plantoes/actions";
+import { errMsg } from "@/lib/utils";
 
 export function NovoPlantaoFab() {
   const [open, setOpen] = useState(false);
@@ -47,7 +48,7 @@ export function NovoPlantaoFab() {
         });
       } catch (err) {
         if ((err as { digest?: string })?.digest?.startsWith("NEXT_REDIRECT")) return;
-        toast.error("Erro ao criar plantão", { description: String(err) });
+        toast.error("Erro ao criar plantão", { description: errMsg(err) });
       }
     });
   }

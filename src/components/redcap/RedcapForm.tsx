@@ -14,7 +14,7 @@ import type {
 } from "@/lib/redcap-schema/types";
 import { performWithSync } from "@/lib/sync/perform";
 import type { UpsertColetaRedcapPayload } from "@/lib/sync/executors";
-import { debounce, cn } from "@/lib/utils";
+import { debounce, cn, errMsg } from "@/lib/utils";
 
 type Props = {
   instrument: InstrumentDef;
@@ -94,7 +94,7 @@ export function RedcapForm({
           );
           setSavedAt(new Date());
         } catch (err) {
-          toast.error("Erro ao salvar", { description: String(err) });
+          toast.error("Erro ao salvar", { description: errMsg(err) });
         } finally {
           setSaving(false);
         }
