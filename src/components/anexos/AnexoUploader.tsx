@@ -71,10 +71,19 @@ const TIPO_ORDER: TipoAnexo[] = [
 const EMPTY_EDIT: ImageEditState = { appliedCrop: null, rotation: 0 };
 
 function isImageFile(f: File) {
-  return f.type.startsWith("image/");
+  return f.type.startsWith("image/") || isHeicFile(f);
 }
 function isPdfFile(f: File) {
   return f.type === "application/pdf";
+}
+/**
+ * HEIC (iPhone) não tem decoder em Chrome/Firefox/Edge — canvas não consegue
+ * ler. Detecta por mime OU extensão e desvia do pipeline de
+ * crop/rotação/compressão, subindo o arquivo cru direto pro Storage.
+ */
+function isHeicFile(f: File) {
+  if (/^image\/hei[cf]/i.test(f.type)) return true;
+  return /\.(hei[cf])$/i.test(f.name);
 }
 
 export function AnexoUploader({ paciente }: { paciente: Paciente }) {
@@ -182,9 +191,19 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
     f: File,
     edit: ImageEditState,
   ): Promise<{ blob: File | Blob; mimeType: string; outName: string }> {
-    if (!isImageFile(f)) {
-      return { blob: f, mimeType: f.type, outName: f.name };
+    // HEIC ou PDF: sobe cru. iPhone HEIC já é comprimido e nem decodifica
+    // no canvas dos browsers não-Safari.
+    if (isHeicFile(f) || !f.type.startsWith("image/")) {
+      const mimeType =
+        f.type ||
+        (isHeicFile(f)
+          ? /\.heif$/i.test(f.name)
+            ? "image/heif"
+            : "image/heic"
+          : "application/octet-stream");
+      return { blob: f, mimeType, outName: f.name };
     }
+
     let toUpload: File | Blob = f;
     let outName = f.name;
     let outType = f.type;
@@ -200,11 +219,19 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
         URL.revokeObjectURL(url);
       }
     }
-    const compressed = await imageCompression(
-      new File([toUpload], outName, { type: outType }),
-      { maxSizeMB: 1.5, maxWidthOrHeight: 1920, useWebWorker: true },
-    );
-    return { blob: compressed, mimeType: compressed.type || outType, outName };
+
+    // Compressão é best-effort — se falhar (formato exótico, browser sem
+    // suporte, etc.) cai pro upload do arquivo original.
+    try {
+      const compressed = await imageCompression(
+        new File([toUpload], outName, { type: outType }),
+        { maxSizeMB: 1.5, maxWidthOrHeight: 1920, useWebWorker: true },
+      );
+      return { blob: compressed, mimeType: compressed.type || outType, outName };
+    } catch (compressErr) {
+      console.warn("[anexo] compressão falhou, subindo original:", compressErr);
+      return { blob: toUpload, mimeType: outType, outName };
+    }
   }
 
   async function handleUpload() {
@@ -327,7 +354,7 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
       <input
         ref={fileInput}
         type="file"
-        accept="image/*,application/pdf"
+        accept="image/*,application/pdf,.heic,.heif"
         multiple
         className="hidden"
         onChange={(e) => {
@@ -338,7 +365,7 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
       <input
         ref={addMoreInput}
         type="file"
-        accept="image/*,application/pdf"
+        accept="image/*,application/pdf,.heic,.heif"
         multiple
         className="hidden"
         onChange={(e) => {
