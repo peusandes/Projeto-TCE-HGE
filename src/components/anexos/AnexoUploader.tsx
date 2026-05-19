@@ -603,27 +603,43 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
 
       <Drawer
         open={files.length > 0}
+        dismissible={false}
         onOpenChange={(o) => !o && !pending && reset()}
       >
         <DrawerContent>
           <DrawerHeader>
-            <DrawerTitle>{editorTitle}</DrawerTitle>
-            <DrawerDescription className="flex items-center gap-2 flex-wrap">
-              {files.length > 1 ? (
-                <>
-                  <span>Tipo, data e descrição valem pro lote inteiro.</span>
-                  <span className="text-ash">·</span>
-                  <span className="font-mono text-[11px] text-graphite">
-                    {fmtSize(totalBytes)} total
-                  </span>
-                </>
-              ) : (
-                <span>
-                  Tipo é obrigatório. Para exames, HGT e evolução, a data
-                  também.
-                </span>
-              )}
-            </DrawerDescription>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <DrawerTitle>{editorTitle}</DrawerTitle>
+                <DrawerDescription className="mt-1 flex items-center gap-2 flex-wrap">
+                  {files.length > 1 ? (
+                    <>
+                      <span>Tipo, data e descrição valem pro lote inteiro.</span>
+                      <span className="text-ash">·</span>
+                      <span className="font-mono text-[11px] text-graphite">
+                        {fmtSize(totalBytes)} total
+                      </span>
+                    </>
+                  ) : (
+                    <span>
+                      Tipo é obrigatório. Para exames, HGT e evolução, a data
+                      também.
+                    </span>
+                  )}
+                </DrawerDescription>
+              </div>
+              {/* Fechar — substituto do arrastar pra dismissar (drag move quando
+                  você só queria scrollar a lista no mobile). */}
+              <button
+                type="button"
+                onClick={() => !pending && reset()}
+                disabled={pending}
+                aria-label="Fechar"
+                className="size-9 -mr-1 -mt-1 shrink-0 rounded-full flex items-center justify-center text-graphite hover:text-ink hover:bg-paper-soft transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <X className="h-5 w-5" strokeWidth={1.8} />
+              </button>
+            </div>
           </DrawerHeader>
 
           <div className="space-y-4">

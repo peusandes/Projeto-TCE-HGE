@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import {
@@ -65,17 +65,29 @@ export function NovoPlantaoFab() {
         <span className="text-[14px] font-medium tracking-tight">Novo plantão</span>
       </button>
 
-      <Drawer open={open} onOpenChange={setOpen}>
+      <Drawer open={open} dismissible={false} onOpenChange={setOpen}>
         <DrawerContent>
           <DrawerHeader>
-            <DrawerTitle className="font-display text-[22px] font-light text-ink">
-              Novo plantão
-              <span className="font-display-italic text-ash">.</span>
-            </DrawerTitle>
-            <DrawerDescription>
-              Crie o mapa do plantão. Você pode clonar o mapa do plantão anterior
-              (sem ALTA ou EXCLUSÃO).
-            </DrawerDescription>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <DrawerTitle className="font-display text-[22px] font-light text-ink">
+                  Novo plantão
+                  <span className="font-display-italic text-ash">.</span>
+                </DrawerTitle>
+                <DrawerDescription className="mt-1">
+                  Crie o mapa do plantão. Você pode clonar o mapa do plantão anterior
+                  (sem ALTA ou EXCLUSÃO).
+                </DrawerDescription>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Fechar"
+                className="size-9 -mr-1 -mt-1 shrink-0 rounded-full flex items-center justify-center text-graphite hover:text-ink hover:bg-paper-soft transition-colors"
+              >
+                <X className="h-5 w-5" strokeWidth={1.8} />
+              </button>
+            </div>
           </DrawerHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">

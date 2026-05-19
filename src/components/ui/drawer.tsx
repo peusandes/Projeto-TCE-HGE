@@ -37,8 +37,9 @@ const DrawerContent = React.forwardRef<
       )}
       {...props}
     >
-      <div className="mx-auto mt-3 h-1.5 w-12 rounded-full bg-muted" />
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</div>
+      {/* Handle visual removido — drawer não é mais dismissible por arrastar.
+          Cada drawer tem botão X explícito no header. */}
+      <div className="flex-1 overflow-y-auto p-4 pt-5 sm:p-6">{children}</div>
     </DrawerPrimitive.Content>
   </DrawerPortal>
 ));

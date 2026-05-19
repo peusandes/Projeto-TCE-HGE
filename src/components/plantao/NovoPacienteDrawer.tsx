@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { X } from "lucide-react";
 import { toast } from "sonner";
 import {
   Drawer,
@@ -106,10 +107,20 @@ export function NovoPacienteDrawer({
   }
 
   return (
-    <Drawer open={open} onOpenChange={(o) => !o && onClose()}>
+    <Drawer open={open} dismissible={false} onOpenChange={(o) => !o && onClose()}>
       <DrawerContent>
         <DrawerHeader>
-          <DrawerTitle>Novo paciente</DrawerTitle>
+          <div className="flex items-start justify-between gap-3">
+            <DrawerTitle>Novo paciente</DrawerTitle>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Fechar"
+              className="size-9 -mr-1 -mt-1 shrink-0 rounded-full flex items-center justify-center text-graphite hover:text-ink hover:bg-paper-soft transition-colors"
+            >
+              <X className="h-5 w-5" strokeWidth={1.8} />
+            </button>
+          </div>
         </DrawerHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-2">

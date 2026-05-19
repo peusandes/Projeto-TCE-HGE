@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { FileSpreadsheet, AlertTriangle } from "lucide-react";
+import { FileSpreadsheet, AlertTriangle, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   Drawer,
@@ -70,13 +70,25 @@ export function ExcelImportSheet({
   }
 
   return (
-    <Drawer open={open} onOpenChange={(o) => !o && onClose()}>
+    <Drawer open={open} dismissible={false} onOpenChange={(o) => !o && onClose()}>
       <DrawerContent>
         <DrawerHeader>
-          <DrawerTitle>Importar mapa do Excel</DrawerTitle>
-          <DrawerDescription>
-            Aceita a estrutura do Excel do plantão (Leito · Identificação · Situação · REDCAP · TCLE · Descrição · Comentários).
-          </DrawerDescription>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <DrawerTitle>Importar mapa do Excel</DrawerTitle>
+              <DrawerDescription className="mt-1">
+                Aceita a estrutura do Excel do plantão (Leito · Identificação · Situação · REDCAP · TCLE · Descrição · Comentários).
+              </DrawerDescription>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Fechar"
+              className="size-9 -mr-1 -mt-1 shrink-0 rounded-full flex items-center justify-center text-graphite hover:text-ink hover:bg-paper-soft transition-colors"
+            >
+              <X className="h-5 w-5" strokeWidth={1.8} />
+            </button>
+          </div>
         </DrawerHeader>
 
         <div className="space-y-4">
