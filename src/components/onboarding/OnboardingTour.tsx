@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, X, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { marcarOnboarded } from "@/app/(app)/onboarding-actions";
@@ -155,7 +154,6 @@ type Props = {
 };
 
 export function OnboardingTour({ nomePesquisador, forced = false, onClose }: Props) {
-  const router = useRouter();
   const [open, setOpen] = useState(true);
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState<"forward" | "back">("forward");
@@ -201,12 +199,9 @@ export function OnboardingTour({ nomePesquisador, forced = false, onClose }: Pro
         await marcarOnboarded();
         setOpen(false);
         onClose?.();
-        if (navigateToPlantoes) {
-          router.push("/plantoes");
-          router.refresh();
-        } else {
-          router.refresh();
-        }
+        // Hard navigation pra evitar stale CSS hash em dev (revalidatePath
+        // invalida o layout enquanto router.push ainda usa referências antigas)
+        window.location.href = navigateToPlantoes ? "/plantoes" : window.location.pathname;
       } catch (err) {
         toast.error("Erro ao salvar progresso", { description: errMsg(err) });
       }
