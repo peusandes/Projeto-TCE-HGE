@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 import {
   Camera,
   Paperclip,
@@ -156,14 +156,27 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
     });
   }
 
-  function updateActiveEdit(state: ImageEditState) {
-    setEditStates((prev) => {
-      if (prev[activeIndex] === state) return prev;
-      const next = [...prev];
-      next[activeIndex] = state;
-      return next;
-    });
-  }
+  // useCallback é crítico aqui — o ImageEditor tem onStateChange nas deps
+  // de um useEffect, então uma nova referência a cada render dispararia
+  // loop infinito de re-render.
+  const updateActiveEdit = useCallback(
+    (state: ImageEditState) => {
+      setEditStates((prev) => {
+        const cur = prev[activeIndex];
+        if (
+          cur &&
+          cur.rotation === state.rotation &&
+          cur.appliedCrop === state.appliedCrop
+        ) {
+          return prev;
+        }
+        const next = [...prev];
+        next[activeIndex] = state;
+        return next;
+      });
+    },
+    [activeIndex],
+  );
 
   async function processOne(
     f: File,
