@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AlertTriangle, RefreshCcw, ArrowLeft } from "lucide-react";
+import * as Sentry from "@sentry/nextjs";
 
 export default function GlobalError({
   error,
@@ -16,6 +17,8 @@ export default function GlobalError({
     // Log no console pra ficar visível no Vercel runtime logs.
     // eslint-disable-next-line no-console
     console.error("[lanc-error]", error);
+    // Envia pro Sentry — no-op se DSN não estiver setado.
+    Sentry.captureException(error);
   }, [error]);
 
   return (

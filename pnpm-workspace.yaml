@@ -1,4 +1,5 @@
 allowBuilds:
+  '@sentry/cli': true
   esbuild: true
   unrs-resolver: true
 onlyBuiltDependencies:
@@ -6,3 +7,4 @@ onlyBuiltDependencies:
   - "@tailwindcss/oxide"
   - esbuild
   - sharp
+  - "@sentry/cli"
