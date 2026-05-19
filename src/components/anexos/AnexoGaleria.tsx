@@ -135,13 +135,13 @@ export function AnexoGaleria({ anexos }: { anexos: Anexo[] }) {
                   alt={previewAnexo.descricao ?? "Anexo"}
                   width={1200}
                   height={1200}
-                  className="w-full h-auto max-h-[75vh] object-contain bg-black"
+                  className="w-full h-auto max-h-[75dvh] object-contain bg-black"
                   unoptimized
                 />
               ) : (
                 <iframe
                   src={urls[previewAnexo.id]}
-                  className="w-full h-[75vh]"
+                  className="w-full h-[75dvh]"
                   title="PDF preview"
                 />
               )}

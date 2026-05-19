@@ -38,6 +38,9 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+    /* Evita pull-to-refresh acidental no Chrome Android e bounce-back
+       no Safari iOS quando o conteúdo já está no topo/fundo. */
+    overscroll-behavior-y: contain;
   }
   input, textarea, select {
     font-size: 16px;
@@ -51,6 +54,12 @@
 @layer utilities {
   .safe-top { padding-top: env(safe-area-inset-top); }
   .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  /* Garante padding mínimo mesmo sem safe-area (ex.: no Chrome Android sem
+     gesture bar). Útil em fixed elements como FABs. */
+  .safe-bottom-min { padding-bottom: max(env(safe-area-inset-bottom), 8px); }
+  /* Altura ajustável conforme barra do navegador aparece/some. */
+  .h-dvh { height: 100dvh; }
+  .min-h-dvh { min-height: 100dvh; }
   .min-tap { min-height: 44px; min-width: 44px; }
   .text-balance { text-wrap: balance; }
   .tab-num { font-variant-numeric: tabular-nums; }

@@ -126,7 +126,7 @@ export function MapaCollapsible({
             </button>
           </div>
           <div
-            className="flex-1 overflow-auto p-4 flex items-center justify-center"
+            className="flex-1 overflow-auto overscroll-contain p-4 flex items-center justify-center"
             onClick={(e) => e.stopPropagation()}
           >
             <Image
@@ -134,7 +134,7 @@ export function MapaCollapsible({
               alt={imageAlt}
               width={2400}
               height={Math.round(2400 / aspectRatio)}
-              className="max-w-full h-auto rounded-lg shadow-2xl bg-paper"
+              className="max-w-full max-h-[80dvh] h-auto rounded-lg shadow-2xl bg-paper object-contain"
               priority
               sizes="100vw"
             />

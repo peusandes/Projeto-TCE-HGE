@@ -4,7 +4,7 @@ export const metadata = { title: "Offline — LANC TCE" };
 
 export default function OfflinePage() {
   return (
-    <div className="min-h-svh flex flex-col items-center justify-center bg-paper-grain px-5 py-10">
+    <div className="min-h-dvh flex flex-col items-center justify-center bg-paper-grain px-5 py-10">
       <div className="text-center space-y-6 max-w-sm">
         <Image
           src="/logo-lanc.png"

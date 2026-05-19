@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default function LoginPage() {
   return (
-    <div className="min-h-svh flex flex-col bg-paper-grain">
+    <div className="min-h-dvh flex flex-col bg-paper-grain">
       <div className="flex-1 flex flex-col items-center justify-center px-5 py-10">
         <div className="w-full max-w-sm">
           <div className="flex flex-col items-center gap-4 mb-10">

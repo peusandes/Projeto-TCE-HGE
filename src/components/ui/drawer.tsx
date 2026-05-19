@@ -32,14 +32,21 @@ const DrawerContent = React.forwardRef<
     <DrawerPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto max-h-[92vh] flex-col rounded-t-2xl border bg-background",
+        // svh em vez de vh — no iOS Safari, vh representa o viewport SEM a
+        // barra de URL e o drawer ficava maior que a tela visível, cortando
+        // o footer quando a barra aparecia. svh garante que SEMPRE cabe.
+        "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto max-h-[88svh] flex-col rounded-t-2xl border bg-background",
+        // Padding bottom respeitando home indicator do iPhone.
+        "pb-[env(safe-area-inset-bottom)]",
         className,
       )}
       {...props}
     >
       {/* Handle visual removido — drawer não é mais dismissible por arrastar.
           Cada drawer tem botão X explícito no header. */}
-      <div className="flex-1 overflow-y-auto p-4 pt-5 sm:p-6">{children}</div>
+      <div className="flex-1 overflow-y-auto overscroll-contain p-4 pt-5 sm:p-6">
+        {children}
+      </div>
     </DrawerPrimitive.Content>
   </DrawerPortal>
 ));
