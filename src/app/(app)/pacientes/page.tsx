@@ -3,6 +3,7 @@ import { ptBR } from "date-fns/locale";
 import { listAllPacientesAgrupados } from "@/lib/data/pacientes";
 import { PacienteListItem } from "@/components/paciente/PacienteListItem";
 import { PacientesSearch } from "@/components/paciente/PacientesSearch";
+import { BulkActionsToolbar } from "@/components/paciente/BulkActionsToolbar";
 import type { Paciente } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 
@@ -46,6 +47,14 @@ export default async function PacientesIndexPage() {
             : `${total} ${total === 1 ? "paciente" : "pacientes"} na coleta.`}
         </p>
       </section>
+
+      {total > 0 && (
+        <div className="flex justify-end">
+          <BulkActionsToolbar
+            pacientesElegiveis={[...admissao, ...seguimento, ...altaNoMapa]}
+          />
+        </div>
+      )}
 
       {total === 0 ? (
         <EmptyState />

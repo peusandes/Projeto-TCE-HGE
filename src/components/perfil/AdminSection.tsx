@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, Database } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { listPesquisadores } from "@/lib/data/pesquisadores";
@@ -11,25 +11,45 @@ export async function AdminSection() {
 
   return (
     <section className="space-y-5">
-      {/* Atalho pro Dashboard admin */}
-      <Link
-        href="/admin/dashboard"
-        className="block rounded-xl border border-cobalt/30 bg-cobalt/[0.04] p-4 hover:bg-cobalt/[0.08] transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <span className="size-9 rounded-lg bg-cobalt/15 border border-cobalt/30 flex items-center justify-center text-cobalt-soft">
-            <BarChart3 className="h-4 w-4" strokeWidth={1.8} />
-          </span>
-          <div className="flex-1 min-w-0">
-            <p className="text-[14px] font-semibold text-ink leading-tight">
-              Dashboard
-            </p>
-            <p className="text-[11px] text-graphite leading-tight mt-0.5">
-              KPIs da coleta, situação dos pacientes, progresso REDCap
-            </p>
+      {/* Atalhos admin */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <Link
+          href="/admin/dashboard"
+          className="block rounded-xl border border-cobalt/30 bg-cobalt/[0.04] p-4 hover:bg-cobalt/[0.08] transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <span className="size-9 rounded-lg bg-cobalt/15 border border-cobalt/30 flex items-center justify-center text-cobalt-soft shrink-0">
+              <BarChart3 className="h-4 w-4" strokeWidth={1.8} />
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[14px] font-semibold text-ink leading-tight">
+                Dashboard
+              </p>
+              <p className="text-[11px] text-graphite leading-tight mt-0.5">
+                KPIs da coleta
+              </p>
+            </div>
           </div>
-        </div>
-      </Link>
+        </Link>
+        <Link
+          href="/admin/migrations"
+          className="block rounded-xl border border-cobalt/30 bg-cobalt/[0.04] p-4 hover:bg-cobalt/[0.08] transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <span className="size-9 rounded-lg bg-cobalt/15 border border-cobalt/30 flex items-center justify-center text-cobalt-soft shrink-0">
+              <Database className="h-4 w-4" strokeWidth={1.8} />
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[14px] font-semibold text-ink leading-tight">
+                Migrations
+              </p>
+              <p className="text-[11px] text-graphite leading-tight mt-0.5">
+                Schema esperado vs aplicado
+              </p>
+            </div>
+          </div>
+        </Link>
+      </div>
 
       <div className="flex items-baseline gap-3">
         <span className="font-mono text-[11px] text-cobalt-soft tab-num">
