@@ -1,7 +1,12 @@
 import Image from "next/image";
+import { Suspense } from "react";
 import { LoginForm } from "./login-form";
 
 export const metadata = { title: "Entrar — LANC TCE" };
+
+// useSearchParams() no LoginForm força CSR — força a página inteira
+// a ser dinâmica também (evita prerender error no build da Vercel).
+export const dynamic = "force-dynamic";
 
 export default function LoginPage() {
   return (
@@ -26,7 +31,9 @@ export default function LoginPage() {
               </p>
             </div>
           </div>
-          <LoginForm />
+          <Suspense fallback={<LoginFormSkeleton />}>
+            <LoginForm />
+          </Suspense>
           <p className="mt-5 text-center text-[11px] text-ash leading-relaxed max-w-[280px] mx-auto">
             Acesso restrito a pesquisadores cadastrados.
             <br />
@@ -37,6 +44,22 @@ export default function LoginPage() {
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function LoginFormSkeleton() {
+  return (
+    <div className="rounded-2xl border border-hairline bg-paper p-6 space-y-4 animate-pulse">
+      <div className="space-y-2">
+        <div className="h-3 w-12 bg-hairline rounded" />
+        <div className="h-11 bg-paper-soft rounded-md" />
+      </div>
+      <div className="space-y-2">
+        <div className="h-3 w-12 bg-hairline rounded" />
+        <div className="h-11 bg-paper-soft rounded-md" />
+      </div>
+      <div className="h-12 bg-cobalt/40 rounded-md" />
     </div>
   );
 }
