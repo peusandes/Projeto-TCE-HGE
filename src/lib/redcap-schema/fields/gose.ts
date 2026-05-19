@@ -68,6 +68,7 @@ export function buildGoseInstrument(window: Window): InstrumentDef {
         type: "radio",
         choices: GOSE,
         required: true,
+        helpUrl: "https://gose.netlify.app",
       },
       {
         name: `justif_gose_${suf}`,

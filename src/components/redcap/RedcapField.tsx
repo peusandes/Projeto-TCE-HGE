@@ -324,12 +324,26 @@ function FieldLabel({ field, calculated = false }: { field: FieldDef; calculated
         {field.label}
         {field.required && <span className="ml-0.5 text-vermillion">*</span>}
       </label>
-      {calculated && (
-        <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-editorial text-cobalt-soft">
-          <Calculator className="h-3 w-3" strokeWidth={1.8} />
-          calculado
-        </span>
-      )}
+      <div className="flex items-center gap-2 shrink-0">
+        {calculated && (
+          <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-editorial text-cobalt-soft">
+            <Calculator className="h-3 w-3" strokeWidth={1.8} />
+            calculado
+          </span>
+        )}
+        {field.helpUrl && (
+          <a
+            href={field.helpUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-md border border-cobalt/30 bg-cobalt/[0.06] px-2 py-0.5 text-[10px] uppercase tracking-editorial text-cobalt-soft hover:bg-cobalt/[0.12] transition-colors"
+          >
+            <BookOpen className="h-3 w-3" strokeWidth={2} />
+            Como fazer
+            <ExternalLink className="h-2.5 w-2.5 opacity-70" strokeWidth={2} />
+          </a>
+        )}
+      </div>
     </div>
   );
 }
