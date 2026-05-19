@@ -37,7 +37,7 @@ export default function LoginPage() {
           <p className="mt-5 text-center text-[11px] text-ash leading-relaxed max-w-[280px] mx-auto">
             Acesso restrito a pesquisadores cadastrados.
             <br />
-            Solicite seu acesso ao coordenador da LANC.
+            Solicite seu acesso a Pedro Sandes Pereira.
           </p>
           <p className="mt-8 text-center text-[10px] uppercase tracking-editorial text-ash">
             Liga Acadêmica de Neurocirurgia da Bahia
