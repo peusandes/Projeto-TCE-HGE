@@ -60,7 +60,7 @@ export function PerfilForm({ initialNome, email }: Props) {
           {email}
         </p>
         <p className="text-[11px] text-ash">
-          Não pode ser alterado por aqui. Solicite ao coordenador da LANC.
+          Não pode ser alterado por aqui. Solicite a Pedro Sandes Pereira.
         </p>
       </div>
       <Button
