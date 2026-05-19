@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 export type GoseLembrete = {
   paciente_id: string;
   paciente_nome: string;
-  data_trauma: string; // ISO date (yyyy-MM-dd)
+  /** Data base do cálculo — admissão hospitalar (hora_admissao do historia_admissao). */
+  data_admissao: string; // ISO date (yyyy-MM-dd)
   janela: 30 | 90 | 180;
   data_alvo: string; // ISO date — quando o GOS-E vence
   dias_atraso: number; // 0 = hoje; positivo = atrasado; negativo = ainda não venceu
@@ -36,8 +37,11 @@ function diasEntre(a: string, b: string): number {
 /**
  * Retorna a lista de lembretes GOS-E pendentes (janelas que já venceram e que
  * o paciente ainda NÃO completou o instrumento gose_Nd). Inclui pacientes
- * em qualquer situação — alta, óbito não conta porque alta+óbito não tem
- * GOSE (presumivelmente). Filtra só os que têm hora_trauma preenchida.
+ * em qualquer situação exceto EXCLUSAO.
+ *
+ * Base do cálculo: hora_admissao (data hospitalar). Antes era hora_trauma,
+ * mas trauma muitas vezes não está preenchido e admissão sempre está —
+ * mudança feita a pedido do orientador (2026-05-19).
  */
 export async function listGoseLembretes(): Promise<GoseLembrete[]> {
   const supabase = createClient();
@@ -113,11 +117,11 @@ export async function listGoseLembretes(): Promise<GoseLembrete[]> {
     if (info.situacao === "EXCLUSAO") continue;
 
     const historia = lista.find((c) => c.tipo === "historia_admissao");
-    const traumaRaw = historia?.dados?.hora_trauma as string | undefined;
-    if (!traumaRaw) continue;
-    // hora_trauma é datetime; extrai só a data.
-    const dataTrauma = traumaRaw.slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dataTrauma)) continue;
+    const admissaoRaw = historia?.dados?.hora_admissao as string | undefined;
+    if (!admissaoRaw) continue;
+    // hora_admissao é datetime; extrai só a data.
+    const dataAdmissao = admissaoRaw.slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dataAdmissao)) continue;
 
     // Telefones — preferência: alta (mais atualizado), fallback dados_demograficos.
     const alta = lista.find((c) => c.tipo === "alta");
@@ -134,7 +138,7 @@ export async function listGoseLembretes(): Promise<GoseLembrete[]> {
       const goseColeta = lista.find((c) => c.tipo === tipoColeta);
       if (goseColeta?.status === "COMPLETE") continue;
 
-      const dataAlvo = addDays(dataTrauma, janela);
+      const dataAlvo = addDays(dataAdmissao, janela);
       if (dataAlvo > hoje) continue; // ainda não venceu
 
       const diasAtraso = diasEntre(dataAlvo, hoje);
@@ -151,7 +155,7 @@ export async function listGoseLembretes(): Promise<GoseLembrete[]> {
       lembretes.push({
         paciente_id: pid,
         paciente_nome: info.nome,
-        data_trauma: dataTrauma,
+        data_admissao: dataAdmissao,
         janela,
         data_alvo: dataAlvo,
         dias_atraso: diasAtraso,

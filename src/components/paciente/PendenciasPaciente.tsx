@@ -76,14 +76,14 @@ export function PendenciasPaciente({ paciente, coletas, anexos }: Props) {
     });
   }
 
-  // 6) Histórico admissão sem trauma datetime preenchido (GOS-E vai falhar
-  //    de calcular).
+  // 6) Histórico admissão sem hora_admissao preenchida (GOS-E vai falhar
+  //    de calcular — janela 30/90/180 conta da admissão).
   const histColeta = coletas.find((c) => c.instrument === "historia_admissao");
-  if (histColeta && !histColeta.data.hora_trauma) {
+  if (histColeta && !histColeta.data.hora_admissao) {
     pendencias.push({
       level: "warning",
       text:
-        "Histórico da admissão sem hora do trauma — GOS-E 30/90/180 não vai aparecer nos lembretes.",
+        "Histórico da admissão sem hora de admissão — GOS-E 30/90/180 não vai aparecer nos lembretes.",
     });
   }
 

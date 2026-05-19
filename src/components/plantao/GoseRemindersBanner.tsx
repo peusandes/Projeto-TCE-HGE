@@ -96,7 +96,7 @@ function LembreteItem({ lembrete: l }: { lembrete: GoseLembrete }) {
     });
   }
 
-  const traumaLabel = format(parseISO(l.data_trauma), "dd 'de' MMM", {
+  const admissaoLabel = format(parseISO(l.data_admissao), "dd 'de' MMM", {
     locale: ptBR,
   });
   const dueLabel =
@@ -120,7 +120,7 @@ function LembreteItem({ lembrete: l }: { lembrete: GoseLembrete }) {
             {l.paciente_nome}
           </p>
           <p className="text-[11px] text-graphite leading-tight mt-0.5">
-            Trauma {traumaLabel} ·{" "}
+            Admissão {admissaoLabel} ·{" "}
             <span className="font-medium text-saffron">GOS-E {l.janela}d</span>{" "}
             · <span className={cn("font-medium", dueColor)}>{dueLabel}</span>
           </p>
