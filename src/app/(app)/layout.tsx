@@ -1,14 +1,14 @@
 import { AppHeader } from "@/components/shell/AppHeader";
 import { BottomNav } from "@/components/shell/BottomNav";
-import { getCurrentPesquisador } from "@/lib/data/pesquisadores";
+import { SyncProvider } from "@/components/sync/SyncProvider";
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const me = await getCurrentPesquisador();
+export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-svh flex-col">
+      <SyncProvider />
       <AppHeader />
       <main className="flex-1 pb-2">{children}</main>
-      <BottomNav isAdmin={Boolean(me?.is_admin)} />
+      <BottomNav />
     </div>
   );
 }

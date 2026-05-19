@@ -2,27 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, Users, Shield } from "lucide-react";
+import { ClipboardList, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const BASE_ITEMS = [
+const ITEMS = [
   { href: "/plantoes", label: "Plantões", icon: ClipboardList },
   { href: "/pacientes", label: "Pacientes", icon: Users },
 ];
 
-const ADMIN_ITEM = { href: "/admin/pesquisadores", label: "Admin", icon: Shield };
-
-export function BottomNav({ isAdmin = false }: { isAdmin?: boolean }) {
+export function BottomNav() {
   const pathname = usePathname();
-  const items = isAdmin ? [...BASE_ITEMS, ADMIN_ITEM] : BASE_ITEMS;
   return (
     <nav className="sticky bottom-0 z-40 w-full bg-paper border-t border-hairline safe-bottom">
-      <div className={cn("grid", isAdmin ? "grid-cols-3" : "grid-cols-2")}>
-        {items.map(({ href, label, icon: Icon }) => {
-          const active =
-            href === "/admin/pesquisadores"
-              ? pathname.startsWith("/admin")
-              : pathname.startsWith(href);
+      <div className="grid grid-cols-2">
+        {ITEMS.map(({ href, label, icon: Icon }) => {
+          const active = pathname.startsWith(href);
           return (
             <Link
               key={href}

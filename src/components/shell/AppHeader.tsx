@@ -1,8 +1,12 @@
 import Link from "next/link";
+import Image from "next/image";
 import { LogOut, User } from "lucide-react";
 import { OnlineBadge } from "./OnlineBadge";
+import { getCurrentPesquisador } from "@/lib/data/pesquisadores";
 
-export function AppHeader() {
+export async function AppHeader() {
+  const me = await getCurrentPesquisador();
+
   return (
     <header className="sticky top-0 z-40 w-full bg-paper safe-top">
       <div className="flex h-12 items-center justify-between px-5">
@@ -16,13 +20,24 @@ export function AppHeader() {
         </Link>
         <div className="flex items-center gap-3">
           <OnlineBadge />
-          <button
-            type="button"
-            className="size-9 rounded-full border border-hairline flex items-center justify-center text-graphite hover:text-ink hover:border-cobalt/60 transition-colors"
+          <Link
+            href="/perfil"
+            className="relative size-9 rounded-full overflow-hidden border border-hairline flex items-center justify-center text-graphite hover:text-ink hover:border-cobalt/60 transition-colors bg-paper-soft"
             aria-label="Perfil"
           >
-            <User className="h-4 w-4" strokeWidth={1.6} />
-          </button>
+            {me?.avatar_url ? (
+              <Image
+                src={me.avatar_url}
+                alt={me.nome || "Perfil"}
+                fill
+                sizes="36px"
+                className="object-cover"
+                unoptimized
+              />
+            ) : (
+              <User className="h-4 w-4" strokeWidth={1.6} />
+            )}
+          </Link>
           <form action="/auth/signout" method="post">
             <button
               type="submit"
