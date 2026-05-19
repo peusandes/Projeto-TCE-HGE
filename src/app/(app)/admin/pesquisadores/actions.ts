@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getSiteUrl } from "@/lib/site-url";
 
 async function requireAdmin() {
   const supabase = createClient();
@@ -28,7 +29,7 @@ export async function convidarPesquisador(input: { email: string; nome?: string 
   }
 
   const admin = createAdminClient();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3030";
+  const siteUrl = getSiteUrl();
 
   const { error } = await admin.auth.admin.inviteUserByEmail(email, {
     redirectTo: `${siteUrl}/auth/callback?next=/auth/setup-account`,
@@ -74,7 +75,7 @@ export async function removerPesquisador(pesquisadorId: string) {
 export async function reenviarConvite(email: string) {
   await requireAdmin();
   const admin = createAdminClient();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3030";
+  const siteUrl = getSiteUrl();
   // Re-invitar via mesmo método: Supabase regenera o link e reenvia
   const { error } = await admin.auth.admin.inviteUserByEmail(email, {
     redirectTo: `${siteUrl}/auth/callback?next=/auth/setup-account`,
