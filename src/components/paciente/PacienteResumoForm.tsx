@@ -2,8 +2,6 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
-import { Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import {
   SETORES,
   SETOR_LABEL,
@@ -27,7 +24,8 @@ import {
   type TcleStatus,
   type VerificacaoAlta,
 } from "@/lib/domain/enums";
-import { deletarPaciente, revalidarPacienteRoutes } from "@/app/(app)/pacientes/[id]/actions";
+import { revalidarPacienteRoutes } from "@/app/(app)/pacientes/[id]/actions";
+import { ExcluirPacienteButton } from "./ExcluirPacienteButton";
 import { performWithSync } from "@/lib/sync/perform";
 import type { UpdatePacientePayload } from "@/lib/sync/executors";
 import type { Paciente } from "@/lib/domain/types";
@@ -40,7 +38,6 @@ const FIELD_INPUT =
   "bg-paper-deep/50 border-hairline focus-visible:border-cobalt focus-visible:ring-0";
 
 export function PacienteResumoForm({ paciente }: { paciente: Paciente }) {
-  const router = useRouter();
   const [nome, setNome] = useState(paciente.nome);
   const [leito, setLeito] = useState(paciente.leito ?? "");
   const [setor, setSetor] = useState<Setor>(paciente.setor);
@@ -131,16 +128,6 @@ export function PacienteResumoForm({ paciente }: { paciente: Paciente }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nome, leito, setor, situacao, tcle, descricao, comentarios, motivo, redcapId, verificacao]);
 
-  async function handleDelete() {
-    if (!confirm(`Excluir paciente "${paciente.nome}"? Esta ação não pode ser desfeita.`)) return;
-    try {
-      await deletarPaciente(paciente.id);
-      toast.success("Paciente excluído");
-      router.push(`/plantoes/${paciente.plantao_id}`);
-    } catch (err) {
-      toast.error("Erro ao excluir", { description: errMsg(err) });
-    }
-  }
 
   return (
     <div className="space-y-4">
@@ -291,9 +278,11 @@ export function PacienteResumoForm({ paciente }: { paciente: Paciente }) {
       </div>
 
       <div className="pt-4 border-t border-hairline">
-        <Button variant="destructive" size="sm" onClick={handleDelete}>
-          <Trash2 className="h-4 w-4 mr-1.5" /> Excluir paciente
-        </Button>
+        <ExcluirPacienteButton
+          pacienteId={paciente.id}
+          pacienteNome={paciente.nome}
+          plantaoId={paciente.plantao_id}
+        />
       </div>
 
       <ConfirmAltaDialog

@@ -143,6 +143,30 @@ export function RedcapForm({
     const next: FormStatus = status === "COMPLETE" ? "INCOMPLETE" : "COMPLETE";
     setStatus(next);
     toast.success(`Marcado como ${STATUS_LABEL[next]}`);
+
+    // Auto-link: ao completar instrumento de seguimento, oferece atualizar
+    // a situação do paciente pra SEG (se ainda estiver em ADM).
+    if (next === "COMPLETE" && instrument.id === "seguimento") {
+      toast.info("Atualizar situação do paciente?", {
+        description: "Marcar como Seguimento (se ainda estiver em Admissão)",
+        duration: 8000,
+        action: {
+          label: "Sim",
+          onClick: async () => {
+            try {
+              const { atualizarPaciente } = await import(
+                "@/app/(app)/pacientes/[id]/actions"
+              );
+              await atualizarPaciente(paciente.id, { situacao: "SEG" });
+              toast.success("Paciente marcado como Seguimento");
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              toast.error("Erro ao atualizar", { description: msg });
+            }
+          },
+        },
+      });
+    }
   }
 
   return (

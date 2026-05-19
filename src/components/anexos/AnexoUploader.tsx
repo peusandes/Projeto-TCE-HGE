@@ -551,7 +551,31 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
       const total = targets.length;
 
       if (ok > 0 && err === 0) {
-        toast.success(total === 1 ? "Anexo enviado" : `${ok} anexos enviados`);
+        // Auto-link TCLE: se subiu foto de TCLE assinado e o paciente AINDA
+        // está PENDENTE/RECUSADO, oferece atualizar o status num toque.
+        if (tipo === "TCLE_ASSINADO" && paciente.tcle_status !== "ASSINADO") {
+          toast.success(total === 1 ? "TCLE anexado" : `${ok} anexos enviados`, {
+            description: "Marcar TCLE do paciente como Assinado?",
+            duration: 8000,
+            action: {
+              label: "Sim, marcar",
+              onClick: async () => {
+                try {
+                  const { atualizarPaciente } = await import(
+                    "@/app/(app)/pacientes/[id]/actions"
+                  );
+                  await atualizarPaciente(paciente.id, { tcle_status: "ASSINADO" });
+                  toast.success("TCLE marcado como Assinado");
+                  router.refresh();
+                } catch (err) {
+                  toast.error("Erro ao atualizar TCLE", { description: errMsg(err) });
+                }
+              },
+            },
+          });
+        } else {
+          toast.success(total === 1 ? "Anexo enviado" : `${ok} anexos enviados`);
+        }
         setTimeout(() => {
           reset();
           router.refresh();
