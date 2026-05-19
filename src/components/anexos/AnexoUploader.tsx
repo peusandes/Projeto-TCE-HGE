@@ -108,9 +108,11 @@ function isPdfFile(f: File) {
   return /\.pdf$/i.test(f.name);
 }
 function isEditableImage(f: File) {
-  // Só dá pra editar (crop/rotação) o que o canvas decodifica.
-  if (isHeicFile(f)) return false;
-  return f.type.startsWith("image/");
+  // Qualquer imagem entra no editor — Safari decoda HEIC no canvas (iPhone
+  // funciona normalmente). Em browsers sem suporte HEIC, o preview pode
+  // ficar em branco, mas o try/catch do processOne resolve no upload.
+  if (!isImageFile(f)) return false;
+  return true;
 }
 function fmtSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -312,6 +314,13 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
         blob = await getCroppedBlob(url, edit.appliedCrop, edit.rotation, 0.92);
         outName = f.name.replace(/\.[^.]+$/, "") + ".jpg";
         mime = "image/jpeg";
+      } catch (err) {
+        // Browser sem suporte ao formato (ex.: HEIC fora do Safari) —
+        // sobe original sem edição em vez de derrubar o upload.
+        console.warn("[anexo] crop/rotação falhou, subindo original:", err);
+        blob = f;
+        outName = f.name;
+        mime = f.type || mime;
       } finally {
         URL.revokeObjectURL(url);
       }
