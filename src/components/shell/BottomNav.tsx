@@ -6,8 +6,8 @@ import { ClipboardList, Users, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ITEMS = [
-  { href: "/plantoes", label: "Plantões", icon: ClipboardList },
   { href: "/pacientes", label: "Pacientes", icon: Users },
+  { href: "/plantoes", label: "Plantões", icon: ClipboardList },
   { href: "/manual", label: "Manual", icon: BookOpen },
 ];
 
