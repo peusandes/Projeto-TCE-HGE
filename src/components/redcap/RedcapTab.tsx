@@ -27,6 +27,9 @@ type Coleta = {
 type Props = {
   paciente: { id: string; nome: string; plantao_id: string };
   coletas: Coleta[];
+  /** Quando definido (ex.: "gose_30d"), abre esse instrumento ao montar.
+   *  Vem do query param ?open= via deep-link (banner GOS-E). */
+  initialOpenInstrument?: string | null;
 };
 
 const STATUS_META: Record<FormStatus, { label: string; color: string; Icon: typeof Clock }> = {
@@ -50,9 +53,12 @@ function formatDataSeg(d: FormData): string | null {
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
-export function RedcapTab({ paciente, coletas }: Props) {
+export function RedcapTab({ paciente, coletas, initialOpenInstrument }: Props) {
   // Key composta pra identificar uma coleta específica: `${instrument}#${seq}`
-  const [openKey, setOpenKey] = useState<string | null>(null);
+  // Se veio um initialOpenInstrument via query param, abre seq=1 por padrão.
+  const [openKey, setOpenKey] = useState<string | null>(
+    initialOpenInstrument ? `${initialOpenInstrument}#1` : null,
+  );
   const [adicionando, setAdicionando] = useState<InstrumentId | null>(null);
   const [, startTransition] = useTransition();
   const router = useRouter();

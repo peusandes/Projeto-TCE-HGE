@@ -24,9 +24,25 @@ import { SITUACAO_LABEL, SETOR_SHORT } from "@/lib/domain/enums";
 
 export const dynamic = "force-dynamic";
 
-export default async function PacientePage({ params }: { params: { id: string } }) {
+type SearchParams = { tab?: string; open?: string };
+
+export default async function PacientePage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: SearchParams;
+}) {
   const paciente = await getPaciente(params.id);
   if (!paciente) notFound();
+
+  // Deep-link: vem do banner GOS-E (/?tab=redcap&open=gose_30d) ou de
+  // links similares pra abrir a aba e o instrumento direto.
+  const validTabs = ["resumo", "redcap", "anexos"] as const;
+  const initialTab = (validTabs as readonly string[]).includes(searchParams.tab ?? "")
+    ? (searchParams.tab as (typeof validTabs)[number])
+    : "resumo";
+  const initialOpenInstrument = searchParams.open ?? null;
 
   const [timeline, anexos, plantao, coletas] = await Promise.all([
     getTimelineDoPaciente(paciente.id),
@@ -76,7 +92,7 @@ export default async function PacientePage({ params }: { params: { id: string } 
         </div>
       </section>
 
-      <Tabs defaultValue="resumo">
+      <Tabs defaultValue={initialTab}>
         <TabsList>
           <TabsTrigger value="resumo">Resumo</TabsTrigger>
           <TabsTrigger value="redcap">
@@ -96,6 +112,7 @@ export default async function PacientePage({ params }: { params: { id: string } 
           <RedcapTab
             paciente={{ id: paciente.id, nome: paciente.nome, plantao_id: paciente.plantao_id }}
             coletas={coletas}
+            initialOpenInstrument={initialOpenInstrument}
           />
         </TabsContent>
 
