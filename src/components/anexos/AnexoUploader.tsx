@@ -47,6 +47,7 @@ import type { Paciente } from "@/lib/domain/types";
 import { createClient } from "@/lib/supabase/client";
 import { buildStoragePath } from "@/lib/utils/storage-path";
 import { getCroppedBlob } from "@/lib/utils/crop-image";
+import { parseDateFromFilename } from "@/lib/utils/parse-filename-date";
 import { ImageEditor, type ImageEditState } from "./ImageEditor";
 import { cn, errMsg } from "@/lib/utils";
 
@@ -140,10 +141,12 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
   const [dataRef, setDataRef] = useState(format(new Date(), "yyyy-MM-dd"));
   const [descricao, setDescricao] = useState("");
   /**
-   * Datas individuais por arquivo. Usado SÓ pra HGT quando há múltiplas fotos
-   * (caso: HGT do dia 15, 16, 17 num lote). Pra qualquer outro tipo a data
-   * compartilhada (dataRef) é usada uniformemente.
-   * Sempre sync'd com files.length.
+   * Datas individuais por arquivo.
+   *  - HGT batch: auto-incremento sequencial a partir de dataRef (dia 15,16,17…)
+   *  - Outros batches: inicializa com data parseada do nome do arquivo (padrão
+   *    "DD_MM" no filename) ou dataRef base. Sem auto-incremento — vários
+   *    arquivos podem ser do mesmo dia.
+   *  - Single file: não usado, usa só dataRef.
    */
   const [perFileDates, setPerFileDates] = useState<string[]>([]);
   const [pending, startTransition] = useTransition();
@@ -162,32 +165,61 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
   );
 
   /**
-   * HGT em lote: cada foto vira um anexo separado com data própria, em
-   * sequência partindo da data base. Caso clássico: HGT do dia 15, 16, 17
-   * num único lote de 3 fotos.
+   * HGT em lote: cada foto vira um anexo com data própria, em sequência
+   * (dia 15, 16, 17…). Auto-incremento exclusivo do HGT.
    */
   const isHGTBatch = tipo === "HGT" && files.length > 1;
 
   /**
-   * Auto-fill das datas por arquivo quando entra modo HGT batch ou quando
-   * a data base muda. Sobrescreve eventuais edições anteriores — comportamento
-   * documentado no helper text da UI.
+   * Batch genérico (qualquer tipo, >=2 arquivos): cada arquivo tem data
+   * própria editável. Inicializa com data parseada do nome do arquivo (se
+   * encontrar padrão DD_MM no filename) ou cai pra dataRef base. NÃO
+   * auto-incrementa — vários exames podem ser do mesmo dia.
+   */
+  const isPerFileBatch = files.length > 1 && tipo !== "";
+
+  /**
+   * HGT batch: auto-incremento sequencial a partir de dataRef.
+   * Reescreve perFileDates sempre que data base muda — comportamento
+   * documentado no helper text.
    */
   useEffect(() => {
-    if (!isHGTBatch) {
-      // Limpa pra evitar consumir memória/render quando não tá em uso.
-      if (perFileDates.length > 0) setPerFileDates([]);
-      return;
-    }
+    if (!isHGTBatch) return;
     const base = dataRef && isValid(parseISO(dataRef)) ? parseISO(dataRef) : new Date();
     const next = files.map((_, i) => format(addDays(base, i), "yyyy-MM-dd"));
-    // Evita rerender redundante.
     const same =
       next.length === perFileDates.length &&
       next.every((d, i) => d === perFileDates[i]);
     if (!same) setPerFileDates(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHGTBatch, dataRef, files.length]);
+
+  /**
+   * Batch não-HGT: inicializa perFileDates uma vez por arquivo, preferindo
+   * data parseada do nome. NÃO sobrescreve depois (user pode editar livre).
+   * Quando arquivos são adicionados/removidos, ajusta o array preservando
+   * as datas dos arquivos existentes.
+   */
+  useEffect(() => {
+    if (!isPerFileBatch || isHGTBatch) {
+      // HGT já é tratado acima; single file não usa perFileDates.
+      if (!isHGTBatch && perFileDates.length > 0) setPerFileDates([]);
+      return;
+    }
+    setPerFileDates((prev) => {
+      const next = files.map((f, i) => {
+        // Preserva edição existente se o índice já tem valor
+        if (prev[i]) return prev[i];
+        const parsed = parseDateFromFilename(f.name);
+        return parsed || dataRef || format(new Date(), "yyyy-MM-dd");
+      });
+      const same =
+        next.length === prev.length &&
+        next.every((d, i) => d === prev[i]);
+      return same ? prev : next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPerFileBatch, isHGTBatch, files.length]);
 
   function updatePerFileDate(index: number, newDate: string) {
     setPerFileDates((prev) => {
@@ -277,7 +309,16 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
     if (dentroDoTotal.length === 0) return;
 
     setFiles((prev) => {
-      if (prev.length === 0) setActiveIndex(0);
+      if (prev.length === 0) {
+        setActiveIndex(0);
+        // Auto-popula dataRef do nome do 1º arquivo do lote SE dataRef
+        // ainda for o default de hoje (não foi editado manualmente).
+        const hoje = format(new Date(), "yyyy-MM-dd");
+        if (dataRef === hoje && dentroDoTotal[0]) {
+          const parsed = parseDateFromFilename(dentroDoTotal[0].name);
+          if (parsed) setDataRef(parsed);
+        }
+      }
       return [...prev, ...dentroDoTotal];
     });
     setEditStates((prev) => [
@@ -438,8 +479,10 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
       const { blob, mimeType, outName } = await processOne(f, edit);
       if (controller.signal.aborted) throw controller.signal.reason ?? new Error("Abortado");
 
-      // Pra HGT em lote, cada foto tem sua própria data; senão usa a base.
-      const dataDestaFoto = isHGTBatch && perFileDates[i] ? perFileDates[i] : dataRef || null;
+      // Per-file batch (HGT auto-incrementa, outros tipos editáveis):
+      // cada arquivo usa sua própria data; single file usa a base.
+      const dataDestaFoto =
+        isPerFileBatch && perFileDates[i] ? perFileDates[i] : dataRef || null;
 
       const path = buildStoragePath({
         paciente_id: paciente.id,
@@ -799,20 +842,23 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
               <p className="text-[11px] text-ash">
                 {isHGTBatch
                   ? "Define a data base. Os HGTs seguintes são autopreenchidos em sequência abaixo — você pode editar cada um."
-                  : requerData
-                    ? "Dia em que o exame/registro foi feito. Pode ter mais de um por dia."
-                    : "Opcional — padrão é hoje."}
+                  : isPerFileBatch
+                    ? "Padrão pros arquivos do lote — cada um pode ter sua própria data abaixo. Datas no formato DD_MM no nome do arquivo são detectadas automaticamente."
+                    : requerData
+                      ? "Dia em que o exame/registro foi feito. Pode ter mais de um por dia."
+                      : "Opcional — padrão é hoje."}
               </p>
             </div>
 
-            {/* HGT em lote: data por foto */}
-            {isHGTBatch && (
+            {/* Per-file dates: HGT auto-incrementa, outros tipos editáveis */}
+            {isPerFileBatch && (
               <PerFileDates
                 files={files}
                 perFileDates={perFileDates}
                 activeIndex={activeIndex}
                 onActivate={setActiveIndex}
                 onChange={updatePerFileDate}
+                mode={isHGTBatch ? "hgt" : "generic"}
               />
             )}
 
@@ -1152,9 +1198,10 @@ function ThumbItem({
 }
 
 /**
- * Lista de datas individuais por arquivo (usado pra HGT em lote).
- * O usuário pode editar cada data; um clique no item ativa o arquivo
- * correspondente no editor acima pra contexto visual.
+ * Lista de datas individuais por arquivo. Dois modos:
+ *  - "hgt": auto-incremento em sequência, label HGT-específico
+ *  - "generic": cada arquivo editável independente; mostra qual veio
+ *    parseada do nome do arquivo
  */
 function PerFileDates({
   files,
@@ -1162,58 +1209,79 @@ function PerFileDates({
   activeIndex,
   onActivate,
   onChange,
+  mode,
 }: {
   files: File[];
   perFileDates: string[];
   activeIndex: number;
   onActivate: (i: number) => void;
   onChange: (i: number, date: string) => void;
+  mode: "hgt" | "generic";
 }) {
+  const isHgt = mode === "hgt";
   return (
     <div className="rounded-lg border border-cobalt/20 bg-cobalt/[0.04] p-3 space-y-2">
       <div className="flex items-center gap-2">
         <span className="text-[10px] uppercase tracking-editorial text-cobalt-soft font-semibold">
-          HGT — Data por foto
+          {isHgt ? "HGT — Data por foto" : "Data por arquivo"}
         </span>
         <span className="text-[10px] text-ash">·</span>
         <span className="text-[10px] text-ash">
-          {files.length} HGTs no lote
+          {files.length} {isHgt ? "HGTs" : "arquivos"} no lote
         </span>
       </div>
       <ul className="space-y-1.5">
         {files.map((f, i) => {
           const active = i === activeIndex;
           const date = perFileDates[i] ?? "";
+          // Marca quando a data veio do parse do nome (heurística: se data
+          // atual bate exatamente com o que o parser extrairia)
+          const fromFilename =
+            !isHgt && date && parseDateFromFilename(f.name) === date;
           return (
-            <li key={`${f.name}-${i}`} className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => onActivate(i)}
-                className={cn(
-                  "size-6 rounded-md font-mono text-[11px] flex items-center justify-center shrink-0 transition-colors",
-                  active
-                    ? "bg-cobalt text-white"
-                    : "bg-paper border border-hairline text-graphite hover:border-cobalt/40",
-                )}
-                aria-label={`Selecionar foto ${i + 1}`}
-              >
-                {i + 1}
-              </button>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => onChange(i, e.target.value)}
-                className={cn(
-                  "flex-1 h-8 px-2 rounded-md bg-paper border border-hairline text-[12px] font-mono",
-                  "focus:outline-none focus:border-cobalt",
-                )}
-              />
+            <li key={`${f.name}-${i}`} className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onActivate(i)}
+                  className={cn(
+                    "size-6 rounded-md font-mono text-[11px] flex items-center justify-center shrink-0 transition-colors",
+                    active
+                      ? "bg-cobalt text-white"
+                      : "bg-paper border border-hairline text-graphite hover:border-cobalt/40",
+                  )}
+                  aria-label={`Selecionar arquivo ${i + 1}`}
+                >
+                  {i + 1}
+                </button>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => onChange(i, e.target.value)}
+                  className={cn(
+                    "flex-1 h-8 px-2 rounded-md bg-paper border border-hairline text-[12px] font-mono",
+                    "focus:outline-none focus:border-cobalt",
+                  )}
+                />
+              </div>
+              {!isHgt && (
+                <div className="ml-8 flex items-center gap-1.5">
+                  <span className="text-[10px] text-ash truncate">{f.name}</span>
+                  {fromFilename && (
+                    <span className="text-[9px] uppercase tracking-editorial text-cobalt-soft shrink-0">
+                      do nome
+                    </span>
+                  )}
+                </div>
+              )}
             </li>
           );
         })}
       </ul>
       <p className="text-[10px] text-graphite italic leading-snug">
-        Mudar a data base acima reordena tudo automaticamente.
+        {isHgt
+          ? "Mudar a data base acima reordena tudo automaticamente."
+          : "Datas detectadas no nome (padrão DD_MM) preenchem automaticamente. Edite cada uma se precisar."}
       </p>
     </div>
   );

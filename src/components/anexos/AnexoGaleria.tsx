@@ -75,6 +75,22 @@ export function AnexoGaleria({ anexos }: { anexos: Anexo[] }) {
     return acc;
   }, {});
 
+  // Exames laboratoriais e de imagem: ordem cronológica crescente por
+  // data_referencia (mais antigo primeiro). Sem data vai pro fim.
+  // Outros grupos mantêm a ordem de chegada (upload).
+  const TIPOS_CRONOLOGICOS = new Set(["EXAME_LABORATORIAL", "EXAME_IMAGEM"]);
+  for (const tipo of Object.keys(grupos)) {
+    if (!TIPOS_CRONOLOGICOS.has(tipo)) continue;
+    grupos[tipo].sort((a, b) => {
+      const da = a.data_referencia ?? "";
+      const db = b.data_referencia ?? "";
+      if (!da && !db) return 0;
+      if (!da) return 1;
+      if (!db) return -1;
+      return da.localeCompare(db);
+    });
+  }
+
   return (
     <>
       <div className="space-y-4">
