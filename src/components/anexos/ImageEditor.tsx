@@ -15,21 +15,23 @@ export type ImageEditState = {
 type Props = {
   file: File;
   onStateChange: (state: ImageEditState) => void;
+  /** Estado inicial — usado quando o editor é remontado ao trocar de foto no lote. */
+  initial?: ImageEditState;
 };
 
 /**
  * Editor opt-in: o usuário vê a imagem inteira no preview e pode zoomar/rotacionar
  * sem alterar o que é enviado. Só recorta se ligar o toggle "Aplicar recorte".
  */
-export function ImageEditor({ file, onStateChange }: Props) {
+export function ImageEditor({ file, onStateChange, initial }: Props) {
   const imageUrl = useMemo(() => URL.createObjectURL(file), [file]);
   useEffect(() => () => URL.revokeObjectURL(imageUrl), [imageUrl]);
 
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
-  const [rotation, setRotation] = useState(0);
-  const [pendingCrop, setPendingCrop] = useState<Area | null>(null);
-  const [applyCrop, setApplyCrop] = useState(false);
+  const [rotation, setRotation] = useState(initial?.rotation ?? 0);
+  const [pendingCrop, setPendingCrop] = useState<Area | null>(initial?.appliedCrop ?? null);
+  const [applyCrop, setApplyCrop] = useState(Boolean(initial?.appliedCrop));
 
   const onCropComplete = useCallback((_: Area, pixels: Area) => {
     setPendingCrop(pixels);
