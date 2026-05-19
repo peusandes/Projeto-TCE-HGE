@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/tabs";
 import { PacienteResumoForm } from "@/components/paciente/PacienteResumoForm";
 import { TimelineEvolucao } from "@/components/paciente/TimelineEvolucao";
+import { PendenciasPaciente } from "@/components/paciente/PendenciasPaciente";
 import { RedcapTab } from "@/components/redcap/RedcapTab";
 import { AnexosTab } from "@/components/paciente/AnexosTab";
 import { SITUACAO_LABEL, SETOR_SHORT } from "@/lib/domain/enums";
@@ -128,6 +129,11 @@ export default async function PacientePage({
         </TabsList>
 
         <TabsContent value="resumo" className="space-y-6">
+          <PendenciasPaciente
+            paciente={paciente}
+            coletas={coletas}
+            anexos={anexos}
+          />
           <PacienteResumoForm paciente={paciente} />
           <TimelineEvolucao items={timeline} />
         </TabsContent>

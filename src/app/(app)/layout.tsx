@@ -2,6 +2,7 @@ import { AppHeader } from "@/components/shell/AppHeader";
 import { AppFooter } from "@/components/shell/AppFooter";
 import { BottomNav } from "@/components/shell/BottomNav";
 import { OfflineBanner } from "@/components/shell/OfflineBanner";
+import { IosInstallHint } from "@/components/shell/IosInstallHint";
 import { SyncProvider } from "@/components/sync/SyncProvider";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -13,6 +14,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 pb-2">{children}</main>
       <AppFooter />
       <BottomNav />
+      <IosInstallHint />
     </div>
   );
 }
