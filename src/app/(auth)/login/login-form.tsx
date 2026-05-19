@@ -42,11 +42,13 @@ export function LoginForm() {
       return;
     }
     const supabase = createClient();
+    // Sempre redireciona pra produção, independente de onde o user clicou
+    // (se foi de localhost, ainda assim o email manda pro app em prod).
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/plantoes`,
+      redirectTo: "https://projetotce.com/auth/callback?next=/plantoes",
     });
     if (error) toast.error("Erro ao enviar email", { description: error.message });
-    else toast.success("Email de reset enviado");
+    else toast.success("Email enviado", { description: "Verifique sua caixa de entrada." });
   }
 
   return (
