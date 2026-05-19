@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    /* Dark minimal palette mapped to shadcn tokens */
+    --background: 222 18% 6%;          /* paper #0B0D11 */
+    --foreground: 240 5% 96%;          /* ink #F4F4F5 */
+    --card: 222 16% 11%;               /* paper-deep #16191F */
+    --card-foreground: 240 5% 96%;
+    --popover: 222 16% 11%;
+    --popover-foreground: 240 5% 96%;
+    --primary: 217 91% 60%;            /* cobalt #3B82F6 */
+    --primary-foreground: 240 5% 96%;
+    --secondary: 220 12% 16%;
+    --secondary-foreground: 240 5% 96%;
+    --muted: 220 12% 16%;
+    --muted-foreground: 240 4% 65%;
+    --accent: 220 12% 16%;
+    --accent-foreground: 240 5% 96%;
+    --destructive: 0 73% 60%;
+    --destructive-foreground: 240 5% 96%;
+    --border: 220 11% 19%;             /* hairline */
+    --input: 220 11% 19%;
+    --ring: 217 91% 60%;
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  html {
+    background-color: hsl(var(--background));
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  input, textarea, select {
+    font-size: 16px;
+  }
+  button, [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+}
+
+@layer utilities {
+  .safe-top { padding-top: env(safe-area-inset-top); }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .min-tap { min-height: 44px; min-width: 44px; }
+  .text-balance { text-wrap: balance; }
+  .tab-num { font-variant-numeric: tabular-nums; }
+
+  /* Legacy classes kept as no-ops para não quebrar JSX existente */
+  .font-display { font-feature-settings: "ss01" 1; }
+  .font-display-italic { font-style: italic; opacity: 0.85; }
+  .bg-paper-grain { background-color: hsl(var(--background)); }
+  .rule-dotted {
+    height: 1px;
+    background: linear-gradient(to right, hsl(var(--border)) 0, hsl(var(--border)) 100%);
+    opacity: 0.6;
+  }
+}

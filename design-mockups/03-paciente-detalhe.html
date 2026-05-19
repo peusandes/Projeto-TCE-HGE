@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LANC · Paciente — Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300..900,0..100;1,9..144,300..900,0..100&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: {
+        fontFamily: {
+          display:['Fraunces','serif'], sans:['"IBM Plex Sans"','system-ui','sans-serif'],
+          mono:['"IBM Plex Mono"','ui-monospace','monospace'],
+        },
+        colors: {
+          paper:'#F5F2EC','paper-deep':'#EBE7DD',hairline:'#D9D2C4',
+          ink:'#0A1628',graphite:'#374151',ash:'#6B7280',
+          cobalt:'#1E3A8A','cobalt-soft':'#3B5BB8',
+          vermillion:'#B91C1C',saffron:'#B45309',moss:'#3F6B4C',
+          slate:'#475569',plum:'#5B21B6',
+        }
+      }}
+    }
+  </script>
+  <style>
+    body { background:#E5E0D5; min-height:100vh; }
+    .device { background:#F5F2EC; }
+    .display { font-family:'Fraunces',serif; font-variation-settings:'opsz' 144,'SOFT' 20; }
+    .display-italic { font-family:'Fraunces',serif; font-style:italic; font-variation-settings:'opsz' 9,'SOFT' 100; }
+    .grain::before { content:'';position:absolute;inset:0;
+      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+      pointer-events:none;mix-blend-mode:multiply;opacity:.35; }
+    .tab-num { font-variant-numeric:tabular-nums; }
+    .pill { display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-weight:500;line-height:1; }
+    .pill::before { content:'';width:5px;height:5px;border-radius:999px;background:currentColor; }
+    .tab { padding:11px 0; font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:#6B7280; position:relative;}
+    .tab.active { color:#0A1628; font-weight:500;}
+    .tab.active::after { content:''; position:absolute; left:50%; transform:translateX(-50%); bottom:-1px; width:36px; height:2px; background:#1E3A8A; border-radius:2px;}
+  </style>
+</head>
+<body class="font-sans text-ink antialiased">
+<div class="mx-auto p-6 grid place-items-center">
+  <p class="text-xs uppercase tracking-[0.3em] text-ash mb-3">Mockup 03 · /pacientes/[id]</p>
+  <div class="device relative grain w-[412px] rounded-[44px] shadow-[0_30px_80px_-20px_rgba(10,22,40,0.35)] overflow-hidden border border-hairline">
+
+    <!-- Status bar -->
+    <div class="h-10 flex items-center justify-between px-7 pt-2 text-[11px] tab-num text-ink/80">
+      <span>23:49</span>
+      <span class="flex items-center gap-1"><span>5G</span><span class="ml-1">●●●</span></span>
+    </div>
+
+    <!-- Header -->
+    <header class="px-5 pt-1 pb-3 flex items-center justify-between">
+      <a class="flex items-center gap-2 text-[12px] text-graphite">
+        <span class="display text-[14px]">←</span>
+        <span class="text-[11px] uppercase tracking-[0.25em]">17 mai · UTI 2</span>
+      </a>
+      <div class="flex items-center gap-1.5">
+        <span class="size-1.5 rounded-full bg-moss"></span>
+        <span class="font-mono text-[10px] text-graphite">salvo · 23h49</span>
+      </div>
+    </header>
+
+    <div class="h-px bg-hairline mx-5"></div>
+
+    <!-- Patient title block -->
+    <section class="px-5 pt-5 pb-4">
+      <p class="font-mono text-[10px] uppercase tracking-[0.2em] text-cobalt">Leito 03 · UTI 2</p>
+      <h1 class="display text-[28px] leading-[1.05] font-medium mt-2 text-ink">
+        Emanuel da Mota<br/>Silveira Cardoso
+      </h1>
+      <div class="mt-3 flex items-center gap-2 flex-wrap">
+        <span class="pill text-cobalt bg-cobalt/10">ADM</span>
+        <span class="pill text-saffron bg-saffron/10">TCLE pendente</span>
+        <span class="font-mono text-[10px] text-ash ml-1">REDCap —</span>
+      </div>
+    </section>
+
+    <!-- Tabs -->
+    <nav class="px-5">
+      <div class="border-b border-hairline flex items-center gap-7">
+        <button class="tab active">Resumo</button>
+        <button class="tab">REDCap</button>
+        <button class="tab">Anexos <span class="ml-1 font-mono text-cobalt">7</span></button>
+      </div>
+    </nav>
+
+    <!-- Resumo content -->
+    <section class="px-5 pt-5 space-y-4">
+      <!-- Quick edit row -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-[10px] uppercase tracking-[0.2em] text-ash">Situação</label>
+          <div class="mt-1.5 flex items-center justify-between bg-paper-deep/60 border border-hairline rounded-xl px-3 py-2.5">
+            <span class="text-[13px] font-medium">Admissão</span>
+            <span class="text-ash">▾</span>
+          </div>
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-[0.2em] text-ash">TCLE</label>
+          <div class="mt-1.5 flex items-center justify-between bg-paper-deep/60 border border-hairline rounded-xl px-3 py-2.5">
+            <span class="text-[13px] font-medium text-saffron">Pendente</span>
+            <span class="text-ash">▾</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label class="text-[10px] uppercase tracking-[0.2em] text-ash">Descrição</label>
+        <input value="TCE — queda da própria altura, GCS 12" class="mt-1.5 w-full bg-paper border border-hairline rounded-xl px-3 py-2.5 text-[14px] focus:outline-none focus:border-cobalt"/>
+      </div>
+
+      <div>
+        <label class="text-[10px] uppercase tracking-[0.2em] text-ash">Comentários do plantão</label>
+        <textarea rows="3" class="mt-1.5 w-full bg-paper border border-hairline rounded-xl px-3 py-2.5 text-[13px] leading-relaxed focus:outline-none focus:border-cobalt">Família contactada. Reavaliar GCS em 2h. Aguardando familiar para TCLE.</textarea>
+      </div>
+
+      <!-- Timeline -->
+      <div class="pt-3">
+        <div class="flex items-baseline gap-3 mb-3">
+          <span class="font-mono text-[11px] text-cobalt">02</span>
+          <div class="flex-1 h-px bg-hairline"></div>
+          <span class="display-italic text-[13px] text-ink font-medium">Evolução</span>
+          <div class="flex-1 h-px bg-hairline"></div>
+        </div>
+
+        <ol class="relative pl-5">
+          <span class="absolute left-[7px] top-1.5 bottom-1.5 w-px bg-hairline"></span>
+          <li class="relative mb-4">
+            <span class="absolute -left-[19px] top-1 size-3.5 rounded-full bg-cobalt border-4 border-paper"></span>
+            <p class="font-mono text-[10px] uppercase tracking-wider text-cobalt">17 mai · hoje</p>
+            <p class="text-[13px] mt-0.5"><span class="font-medium">UTI 2 · leito 03</span> · admissão</p>
+            <p class="text-[11px] text-ash">Pedro Sandes</p>
+          </li>
+          <li class="relative mb-4">
+            <span class="absolute -left-[19px] top-1 size-2.5 rounded-full bg-paper border border-hairline"></span>
+            <p class="font-mono text-[10px] uppercase tracking-wider text-ash">16 mai</p>
+            <p class="text-[13px] mt-0.5 text-graphite">Emergência · pré-admissão</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <div class="h-24"></div>
+
+    <!-- Bottom nav -->
+    <nav class="absolute inset-x-0 bottom-0 bg-paper border-t border-hairline pt-3 pb-5">
+      <div class="grid grid-cols-2">
+        <button class="flex flex-col items-center gap-1">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1E3A8A" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>
+          <span class="text-[10px] uppercase tracking-[0.2em] font-medium text-cobalt">Plantões</span>
+          <span class="block h-[2px] w-5 bg-cobalt rounded-full mt-0.5"></span>
+        </button>
+        <button class="flex flex-col items-center gap-1">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="1.6"><path d="M21.4 11.05 12.2 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.19 9.19a2 2 0 0 1-2.83-2.83l8.49-8.49"/></svg>
+          <span class="text-[10px] uppercase tracking-[0.2em] text-ash">Anexos</span>
+          <span class="block h-[2px] w-5 bg-transparent mt-0.5"></span>
+        </button>
+      </div>
+    </nav>
+  </div>
+
+  <p class="mt-4 text-[11px] text-ash max-w-[440px] text-center leading-relaxed">
+    Título do paciente em Fraunces medium (autoridade tipográfica). Inputs com fundo paper-deep, foco em cobalto.
+    Timeline com âncora colorida no evento ativo + nós discretos no passado.
+  </p>
+</div>
+</body>
+</html>

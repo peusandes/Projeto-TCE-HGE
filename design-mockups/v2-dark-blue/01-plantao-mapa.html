@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LANC · Mapa do plantão — v2 Night Shift OS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Onest','system-ui','sans-serif'],
+            mono: ['"JetBrains Mono"','ui-monospace','monospace'],
+          },
+          colors: {
+            void: '#06080F',
+            'void-deep': '#03050B',
+            surface: '#0E1322',
+            'surface-soft': '#141A2C',
+            'surface-elev': '#1A2238',
+            line: '#1F2941',
+            'line-soft': '#161D30',
+            cobalt: {
+              900: '#0A1232',
+              800: '#13205C',
+              700: '#1E3A8A',
+              600: '#2454B0',
+              500: '#3B82F6',
+              400: '#60A5FA',
+              300: '#93C5FD',
+            },
+            text: { primary:'#F5F8FF', secondary:'#9AA4BF', muted:'#5C667F', dim:'#3D465E' },
+            adm:   '#60A5FA',
+            seg:   '#34D399',
+            excl:  '#6B7280',
+            alta:  '#A78BFA',
+            saffron: '#FBBF24',
+            emerald: '#10B981',
+            rose:    '#F87171',
+          },
+          boxShadow: {
+            'glow-blue': '0 0 28px -4px rgba(59,130,246,0.45), 0 0 1px 0 rgba(96,165,250,0.6) inset',
+            'glow-blue-soft': '0 0 18px -4px rgba(59,130,246,0.25)',
+            'glow-emerald': '0 0 18px -4px rgba(16,185,129,0.35)',
+            'glow-amber': '0 0 18px -4px rgba(251,191,36,0.35)',
+            'panel': 'inset 0 1px 0 rgba(255,255,255,0.045), 0 1px 0 rgba(0,0,0,0.6), 0 24px 64px -32px rgba(0,0,0,0.7)',
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    html, body { background: #050811; color-scheme: dark; }
+    body {
+      background:
+        radial-gradient(ellipse 80% 50% at 20% 0%, rgba(30,58,138,0.22), transparent 60%),
+        radial-gradient(ellipse 70% 50% at 80% 100%, rgba(59,130,246,0.12), transparent 60%),
+        #03050B;
+      min-height: 100vh;
+      font-feature-settings: "ss01" 1, "cv11" 1;
+    }
+    /* Device frame ambient */
+    .device-glow {
+      position: absolute; inset: -40px; z-index: -1; pointer-events: none;
+      background:
+        radial-gradient(ellipse 60% 40% at 50% 0%, rgba(59,130,246,0.18), transparent 70%),
+        radial-gradient(ellipse 60% 40% at 50% 100%, rgba(96,165,250,0.10), transparent 70%);
+      filter: blur(40px);
+    }
+    /* Surface noise — keeps backgrounds from feeling flat */
+    .grain::before {
+      content:''; position:absolute; inset:0; pointer-events:none; z-index:0;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.028 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+      mix-blend-mode: screen; opacity:.7;
+    }
+    /* Blueprint grid for hero panels */
+    .grid-blueprint {
+      background-image:
+        linear-gradient(rgba(96,165,250,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(96,165,250,0.05) 1px, transparent 1px);
+      background-size: 28px 28px;
+      mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(0,0,0,0.85), transparent 75%);
+    }
+    .hero-light {
+      background:
+        radial-gradient(ellipse 90% 70% at 50% -10%, rgba(59,130,246,0.22), transparent 70%),
+        radial-gradient(ellipse 60% 30% at 20% 100%, rgba(96,165,250,0.10), transparent 80%);
+    }
+    /* Cards */
+    .panel {
+      background: linear-gradient(180deg, rgba(20,26,44,0.85), rgba(14,19,34,0.85));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.045), 0 1px 0 rgba(0,0,0,0.6), 0 16px 32px -20px rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+    .glass {
+      background: linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0.01));
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    /* Tabular nums on every number */
+    .tnum { font-variant-numeric: tabular-nums; }
+    /* Animations */
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(96,165,250,0.55); }
+      70% { box-shadow: 0 0 0 8px rgba(96,165,250,0); }
+      100% { box-shadow: 0 0 0 0 rgba(96,165,250,0); }
+    }
+    .pulse-ring { animation: pulse-ring 2.2s cubic-bezier(.4,0,.6,1) infinite; }
+    @keyframes glow-breath {
+      0%,100% { box-shadow: 0 0 24px -4px rgba(59,130,246,0.45), 0 12px 28px -10px rgba(0,0,0,0.7); }
+      50% { box-shadow: 0 0 36px -4px rgba(96,165,250,0.6), 0 12px 28px -10px rgba(0,0,0,0.7); }
+    }
+    .glow-breath { animation: glow-breath 3s ease-in-out infinite; }
+    @keyframes scan {
+      0% { transform: translateY(-100%); opacity: 0; }
+      40% { opacity: 0.6; }
+      100% { transform: translateY(2000%); opacity: 0; }
+    }
+    .scan-line {
+      position: absolute; left:0; right:0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(96,165,250,0.6), transparent);
+      animation: scan 6s linear infinite;
+    }
+    /* Pills */
+    .pill {
+      display:inline-flex; align-items:center; gap:6px;
+      padding: 3px 9px 3px 8px; border-radius: 999px;
+      font-size: 10px; line-height: 1; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      border: 1px solid; transition: all .2s;
+    }
+    .pill .dot { width:5px; height:5px; border-radius:999px; box-shadow: 0 0 6px currentColor; }
+    .pill-adm { color:#60A5FA; background:rgba(59,130,246,0.10); border-color:rgba(59,130,246,0.25); }
+    .pill-seg { color:#34D399; background:rgba(16,185,129,0.10); border-color:rgba(16,185,129,0.25); }
+    .pill-excl{ color:#9CA3AF; background:rgba(107,114,128,0.10); border-color:rgba(107,114,128,0.25); }
+    .pill-alta{ color:#A78BFA; background:rgba(167,139,250,0.10); border-color:rgba(167,139,250,0.25); }
+    .pill-pend{ color:#FBBF24; background:rgba(251,191,36,0.10); border-color:rgba(251,191,36,0.25); box-shadow: 0 0 12px -2px rgba(251,191,36,0.2); }
+    .pill-ok  { color:#34D399; background:rgba(16,185,129,0.10); border-color:rgba(16,185,129,0.25); }
+    .pill-rec { color:#F87171; background:rgba(248,113,113,0.10); border-color:rgba(248,113,113,0.25); }
+    /* Patient card accent */
+    .accent-line {
+      position:absolute; left:0; top:14px; bottom:14px; width:2px; border-radius:999px;
+      box-shadow: 0 0 12px currentColor;
+    }
+    /* Sector chevron */
+    .chev { transition: transform .25s; }
+    /* Tap state */
+    .tap { transition: transform .12s, box-shadow .2s, border-color .2s; }
+    .tap:active { transform: scale(0.985); }
+  </style>
+</head>
+<body class="font-sans">
+<div class="mx-auto p-6 grid place-items-center">
+  <p class="text-[11px] uppercase tracking-[0.3em] text-text-muted mb-3 font-mono">v2 · /plantoes/[id]</p>
+
+  <div class="relative">
+    <div class="device-glow"></div>
+    <div class="relative w-[412px] rounded-[44px] overflow-hidden grain border border-line"
+         style="background: #06080F;
+                box-shadow: 0 50px 120px -20px rgba(0,0,0,0.85), 0 0 0 1px rgba(96,165,250,0.06);">
+
+      <!-- Status bar -->
+      <div class="h-10 flex items-center justify-between px-7 pt-2 text-[11px] tnum text-white/70 font-mono z-10 relative">
+        <span>23:48</span>
+        <span class="flex items-center gap-1"><span>5G</span><span class="ml-1">●●●</span></span>
+      </div>
+
+      <!-- Header -->
+      <header class="px-5 pt-1 pb-3 relative z-10">
+        <div class="flex items-center justify-between">
+          <a class="flex items-center gap-2 text-text-secondary">
+            <span class="text-[14px]">←</span>
+            <span class="text-[11px] uppercase tracking-[0.25em]">Plantões</span>
+          </a>
+          <div class="flex items-center gap-3">
+            <span class="inline-flex items-center gap-1.5 text-[10px] font-mono">
+              <span class="relative inline-block size-1.5 rounded-full bg-emerald">
+                <span class="absolute inset-0 rounded-full pulse-ring"></span>
+              </span>
+              <span class="text-emerald/90">sync</span>
+            </span>
+            <button class="size-9 rounded-full border border-line glass flex items-center justify-center text-text-secondary">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6h14M4 12h14M4 18h14"/></svg>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- HERO ZONE -->
+      <section class="relative overflow-hidden">
+        <div class="absolute inset-0 hero-light"></div>
+        <div class="absolute inset-0 grid-blueprint"></div>
+        <div class="scan-line"></div>
+
+        <div class="relative z-10 px-5 pt-3 pb-5">
+          <!-- ATIVO indicator -->
+          <div class="flex items-center justify-between mb-4">
+            <div class="inline-flex items-center gap-2">
+              <span class="relative inline-block size-2 rounded-full bg-cobalt-400 shadow-[0_0_12px_2px_rgba(96,165,250,0.7)]">
+                <span class="absolute inset-0 rounded-full pulse-ring"></span>
+              </span>
+              <span class="text-[10px] uppercase tracking-[0.3em] text-cobalt-300 font-semibold">Em andamento</span>
+            </div>
+            <span class="font-mono text-[10px] text-text-muted uppercase">PLANTÃO #0042</span>
+          </div>
+
+          <!-- Date numeral + day -->
+          <div class="flex items-end gap-4">
+            <div class="relative">
+              <div class="font-mono tnum text-[88px] leading-[0.82] font-medium text-white tracking-[-0.04em]"
+                   style="text-shadow: 0 0 40px rgba(96,165,250,0.35);">
+                17
+              </div>
+              <!-- decorative crosshair tick -->
+              <div class="absolute -top-1 -right-3 w-3 h-px bg-cobalt-400/60"></div>
+              <div class="absolute -top-1 -right-3 h-3 w-px bg-cobalt-400/60"></div>
+            </div>
+            <div class="pb-3 flex-1 min-w-0">
+              <div class="text-[20px] leading-none font-medium text-white capitalize">Domingo</div>
+              <div class="font-mono text-[10px] uppercase tracking-[0.22em] text-text-secondary mt-1.5">maio · 2026</div>
+            </div>
+            <div class="pb-2 text-right">
+              <div class="text-[10px] uppercase tracking-[0.2em] text-text-muted">duração</div>
+              <div class="font-mono text-[14px] tnum text-cobalt-300 mt-0.5">7h 12m</div>
+            </div>
+          </div>
+
+          <p class="mt-4 text-[13px] text-text-secondary">
+            <span class="text-text-primary">Pedro Sandes</span>
+            <span class="mx-1.5 text-text-muted">·</span>
+            <span class="text-text-primary">Theo Campos</span>
+          </p>
+
+          <!-- Decorative sparkline -->
+          <svg viewBox="0 0 400 40" class="w-full h-6 mt-3" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="sl" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stop-color="#3B82F6" stop-opacity=".4"/>
+                <stop offset="100%" stop-color="#3B82F6" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path d="M0,28 C40,22 70,30 100,18 C130,8 160,16 200,10 C240,5 280,18 320,12 C360,8 380,16 400,14 L400,40 L0,40 Z" fill="url(#sl)"/>
+            <path d="M0,28 C40,22 70,30 100,18 C130,8 160,16 200,10 C240,5 280,18 320,12 C360,8 380,16 400,14" fill="none" stroke="#60A5FA" stroke-width="1.2" stroke-linecap="round" opacity=".85"/>
+          </svg>
+
+          <!-- Stat strip -->
+          <div class="mt-3 glass rounded-2xl grid grid-cols-4 divide-x divide-white/[0.05]">
+            <div class="text-center py-3 px-2">
+              <div class="font-mono tnum text-[22px] leading-none font-medium text-white">12</div>
+              <div class="text-[9px] uppercase tracking-[0.18em] text-text-muted mt-1.5">Mapa</div>
+            </div>
+            <div class="text-center py-3 px-2">
+              <div class="font-mono tnum text-[22px] leading-none font-medium text-saffron"
+                   style="text-shadow:0 0 12px rgba(251,191,36,0.5)">04</div>
+              <div class="text-[9px] uppercase tracking-[0.18em] text-text-muted mt-1.5">TCLE</div>
+            </div>
+            <div class="text-center py-3 px-2">
+              <div class="font-mono tnum text-[22px] leading-none font-medium text-cobalt-300"
+                   style="text-shadow:0 0 12px rgba(96,165,250,0.5)">03</div>
+              <div class="text-[9px] uppercase tracking-[0.18em] text-text-muted mt-1.5">ADM</div>
+            </div>
+            <div class="text-center py-3 px-2">
+              <div class="font-mono tnum text-[22px] leading-none font-medium text-alta">02</div>
+              <div class="text-[9px] uppercase tracking-[0.18em] text-text-muted mt-1.5">Altas</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTOR LIST -->
+      <section class="px-5 pt-2 pb-3 relative z-10">
+
+        <!-- UTI 2 -->
+        <div class="pt-4">
+          <button class="w-full flex items-baseline gap-3 mb-3 group">
+            <span class="font-mono text-[11px] tnum text-cobalt-400">04</span>
+            <div class="flex-1 h-px bg-line"></div>
+            <span class="text-[12px] font-medium tracking-[0.18em] uppercase text-white">UTI 2</span>
+            <div class="flex-1 h-px bg-line"></div>
+            <span class="font-mono text-[11px] tnum text-text-secondary">6</span>
+            <svg class="chev w-3 h-3 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+
+          <!-- ADM card -->
+          <a class="block relative panel rounded-2xl px-4 py-3.5 mb-2 tap hover:border-cobalt-500/30 hover:shadow-glow-blue-soft">
+            <div class="accent-line text-cobalt-500"></div>
+            <div class="flex items-start gap-4">
+              <div class="text-center pt-0.5 shrink-0 w-12">
+                <div class="font-mono tnum text-[28px] leading-none font-semibold text-white"
+                     style="text-shadow:0 0 14px rgba(96,165,250,0.4)">03</div>
+                <div class="text-[8px] uppercase tracking-[0.2em] text-text-muted mt-1">leito</div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-[14.5px] font-medium leading-tight text-white">Emanuel da Mota Silveira Cardoso</p>
+                <p class="text-[11px] text-text-secondary mt-0.5">TCE · admissão há 2h12</p>
+                <div class="flex items-center gap-1.5 flex-wrap mt-2.5">
+                  <span class="pill pill-adm"><span class="dot bg-current"></span>Admissão</span>
+                  <span class="pill pill-pend"><span class="dot bg-current"></span>TCLE pend.</span>
+                </div>
+              </div>
+              <span class="text-text-muted mt-1">›</span>
+            </div>
+          </a>
+
+          <!-- SEG card -->
+          <a class="block relative panel rounded-2xl px-4 py-3.5 mb-2 tap hover:border-cobalt-500/30">
+            <div class="accent-line text-seg"></div>
+            <div class="flex items-start gap-4">
+              <div class="text-center pt-0.5 shrink-0 w-12">
+                <div class="font-mono tnum text-[28px] leading-none font-semibold text-white">09</div>
+                <div class="text-[8px] uppercase tracking-[0.2em] text-text-muted mt-1">leito</div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-[14.5px] font-medium leading-tight text-white">Nelviton do Nascimento</p>
+                <p class="text-[11px] text-text-secondary mt-0.5">TCE · seguimento dia 3</p>
+                <div class="flex items-center gap-1.5 flex-wrap mt-2.5">
+                  <span class="pill pill-seg"><span class="dot bg-current"></span>Seguimento</span>
+                  <span class="pill pill-ok"><span class="dot bg-current"></span>TCLE ok</span>
+                </div>
+              </div>
+              <span class="text-text-muted mt-1">›</span>
+            </div>
+          </a>
+
+          <!-- EXCL card -->
+          <a class="block relative panel rounded-2xl px-4 py-3.5 mb-2 opacity-60 tap">
+            <div class="accent-line text-excl"></div>
+            <div class="flex items-start gap-4">
+              <div class="text-center pt-0.5 shrink-0 w-12">
+                <div class="font-mono tnum text-[28px] leading-none font-medium text-text-muted">06</div>
+                <div class="text-[8px] uppercase tracking-[0.2em] text-text-muted mt-1">leito</div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-[14.5px] font-medium leading-tight text-text-muted line-through decoration-1">
+                  Paulo Marcos Silva Souza
+                </p>
+                <p class="text-[11px] text-text-muted mt-0.5 italic">excluído · TCE &gt; 48h</p>
+                <div class="flex items-center gap-1.5 flex-wrap mt-2.5">
+                  <span class="pill pill-excl"><span class="dot bg-current"></span>Exclusão</span>
+                </div>
+              </div>
+            </div>
+          </a>
+
+          <!-- Add to sector -->
+          <button class="mt-2 mb-5 w-full text-left text-[11px] tracking-[0.18em] uppercase text-cobalt-400 flex items-center gap-2">
+            <span class="size-5 rounded-full border border-cobalt-500/40 flex items-center justify-center bg-cobalt-500/10">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+            </span>
+            Adicionar em UTI 2
+          </button>
+        </div>
+
+        <!-- UTI 1 (collapsed) -->
+        <div class="pt-2">
+          <button class="w-full flex items-baseline gap-3 mb-2 group">
+            <span class="font-mono text-[11px] tnum text-text-secondary">03</span>
+            <div class="flex-1 h-px bg-line-soft"></div>
+            <span class="text-[12px] font-medium tracking-[0.18em] uppercase text-text-secondary">UTI 1</span>
+            <div class="flex-1 h-px bg-line-soft"></div>
+            <span class="font-mono text-[11px] tnum text-text-muted">2</span>
+            <svg class="chev w-3 h-3 text-text-muted -rotate-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+        </div>
+
+        <!-- UI 2/3 (collapsed) -->
+        <div class="pt-2">
+          <button class="w-full flex items-baseline gap-3 mb-2 group">
+            <span class="font-mono text-[11px] tnum text-text-secondary">05</span>
+            <div class="flex-1 h-px bg-line-soft"></div>
+            <span class="text-[12px] font-medium tracking-[0.18em] uppercase text-text-secondary">UI 2 / 3</span>
+            <div class="flex-1 h-px bg-line-soft"></div>
+            <span class="font-mono text-[11px] tnum text-text-muted">4</span>
+            <svg class="chev w-3 h-3 text-text-muted -rotate-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+        </div>
+      </section>
+
+      <div class="h-36"></div>
+
+      <!-- Secondary FAB: Excel -->
+      <button class="absolute bottom-24 left-5 z-30 size-12 rounded-full panel flex items-center justify-center text-cobalt-400 hover:text-cobalt-300 hover:border-cobalt-500/40 tap"
+              aria-label="Importar Excel">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13l2 2 4-4"/></svg>
+      </button>
+
+      <!-- Primary FAB: Novo paciente -->
+      <button class="absolute bottom-24 right-5 z-30 inline-flex items-center gap-3 pl-2 pr-5 h-12 rounded-full glow-breath tap"
+              style="background: linear-gradient(135deg, #3B82F6, #1E3A8A); color: white;">
+        <span class="size-8 rounded-full flex items-center justify-center shrink-0"
+              style="background: linear-gradient(180deg, rgba(255,255,255,0.25), rgba(255,255,255,0.08)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 4px 12px -2px rgba(0,0,0,0.4)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg>
+        </span>
+        <span class="text-[14px] font-semibold tracking-tight">Novo paciente</span>
+      </button>
+
+      <!-- Bottom nav -->
+      <nav class="absolute inset-x-0 bottom-0 z-20 pt-3 pb-5"
+           style="background: linear-gradient(180deg, rgba(6,8,15,0.6), rgba(6,8,15,0.95)); backdrop-filter: blur(16px); border-top: 1px solid rgba(255,255,255,0.05);">
+        <div class="grid grid-cols-3">
+          <button class="flex flex-col items-center gap-1.5 py-1 relative">
+            <span class="absolute -top-[1px] left-1/2 -translate-x-1/2 h-[2px] w-8 rounded-full bg-cobalt-400 shadow-[0_0_8px_rgba(96,165,250,0.7)]"></span>
+            <svg class="text-cobalt-400" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>
+            <span class="text-[10px] uppercase tracking-[0.2em] font-semibold text-cobalt-300">Plantões</span>
+          </button>
+          <button class="flex flex-col items-center gap-1.5 py-1">
+            <svg class="text-text-muted" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21.4 11.05 12.2 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.19 9.19a2 2 0 0 1-2.83-2.83l8.49-8.49"/></svg>
+            <span class="text-[10px] uppercase tracking-[0.2em] font-medium text-text-muted">Anexos</span>
+          </button>
+          <button class="flex flex-col items-center gap-1.5 py-1">
+            <svg class="text-text-muted" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2 4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z"/></svg>
+            <span class="text-[10px] uppercase tracking-[0.2em] font-medium text-text-muted">Admin</span>
+          </button>
+        </div>
+      </nav>
+    </div>
+  </div>
+
+  <p class="mt-5 text-[11px] text-text-muted max-w-[480px] text-center leading-relaxed">
+    Hero com grid blueprint + gradient cobalto-deep, sparkline decorativa sob os pesquisadores.
+    Cards de paciente como painéis (top-highlight branco 4%, sombra externa profunda). Filete colorido
+    de 2px no canto esquerdo com glow lateral. FAB com gradient cobalto e breath glow permanente.
+    Pulse-ring no indicador "em andamento" e no "sync".
+  </p>
+</div>
+</body>
+</html>

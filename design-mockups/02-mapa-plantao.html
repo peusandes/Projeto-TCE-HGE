@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LANC · Mapa do plantão — Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300..900,0..100;1,9..144,300..900,0..100&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: {
+        fontFamily: {
+          display: ['Fraunces','serif'],
+          sans: ['"IBM Plex Sans"','system-ui','sans-serif'],
+          mono: ['"IBM Plex Mono"','ui-monospace','monospace'],
+        },
+        colors: {
+          paper:'#F5F2EC','paper-deep':'#EBE7DD',hairline:'#D9D2C4',
+          ink:'#0A1628',graphite:'#374151',ash:'#6B7280',
+          cobalt:'#1E3A8A','cobalt-soft':'#3B5BB8',
+          vermillion:'#B91C1C',saffron:'#B45309',moss:'#3F6B4C',
+          slate:'#475569',plum:'#5B21B6',
+        }
+      }}
+    }
+  </script>
+  <style>
+    body { background:#E5E0D5; min-height:100vh; }
+    .device { background:#F5F2EC; }
+    .display { font-family:'Fraunces',serif; font-variation-settings:'opsz' 144,'SOFT' 20; }
+    .display-italic { font-family:'Fraunces',serif; font-style:italic; font-variation-settings:'opsz' 9,'SOFT' 100; }
+    .grain::before {
+      content:'';position:absolute;inset:0;
+      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+      pointer-events:none; mix-blend-mode:multiply; opacity:.35;
+    }
+    .tab-num { font-variant-numeric: tabular-nums; }
+    /* Pill base */
+    .pill { display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:999px; font-size:10px; letter-spacing:.08em; text-transform:uppercase; font-weight:500; line-height:1; }
+    .pill::before { content:''; width:5px; height:5px; border-radius:999px; background:currentColor; }
+    /* Dotted divider */
+    .dots { background-image: radial-gradient(circle, #D9D2C4 1px, transparent 1px); background-size: 6px 6px; background-repeat:repeat-x; background-position: left center; height:1px; }
+  </style>
+</head>
+<body class="font-sans text-ink antialiased">
+<div class="mx-auto p-6 grid place-items-center">
+  <p class="text-xs uppercase tracking-[0.3em] text-ash mb-3">Mockup 02 · /plantoes/[id]</p>
+  <div class="device relative grain w-[412px] rounded-[44px] shadow-[0_30px_80px_-20px_rgba(10,22,40,0.35)] overflow-hidden border border-hairline">
+
+    <!-- Status bar -->
+    <div class="h-10 flex items-center justify-between px-7 pt-2 text-[11px] tab-num text-ink/80">
+      <span>23:48</span>
+      <span class="flex items-center gap-1"><span>5G</span><span class="ml-1">●●●</span></span>
+    </div>
+
+    <!-- Header -->
+    <header class="px-5 pt-1 pb-3">
+      <div class="flex items-center justify-between">
+        <a class="flex items-center gap-2 text-[12px] text-graphite">
+          <span class="display text-[14px]">←</span>
+          <span class="text-[11px] uppercase tracking-[0.25em]">Plantões</span>
+        </a>
+        <div class="flex items-center gap-1.5">
+          <span class="size-1.5 rounded-full bg-moss"></span>
+          <span class="font-mono text-[10px] text-graphite">sync</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="h-px bg-hairline mx-5"></div>
+
+    <!-- Plantão header banner -->
+    <section class="px-5 pt-5 pb-4">
+      <div class="flex items-end gap-4">
+        <div class="display text-[80px] leading-[0.82] font-light tracking-tight tab-num text-ink">17</div>
+        <div class="pb-2 flex-1 min-w-0">
+          <div class="display-italic text-[18px] leading-none text-graphite font-light">Sexta-feira</div>
+          <div class="text-[10px] uppercase tracking-[0.25em] text-ash mt-1.5">17 maio · 23h47 em curso</div>
+        </div>
+        <button class="pb-2 size-8 -mr-1 text-graphite">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+        </button>
+      </div>
+      <p class="mt-3 text-[12px] text-graphite">Pedro Sandes · Theo Campos</p>
+
+      <!-- Inline stats strip -->
+      <div class="mt-5 grid grid-cols-4 divide-x divide-hairline bg-paper-deep/40 rounded-2xl py-3">
+        <div class="text-center">
+          <div class="display text-[20px] leading-none font-light tab-num">12</div>
+          <div class="text-[9px] uppercase tracking-[0.18em] text-ash mt-1.5">mapa</div>
+        </div>
+        <div class="text-center">
+          <div class="display text-[20px] leading-none font-light tab-num text-saffron">04</div>
+          <div class="text-[9px] uppercase tracking-[0.18em] text-ash mt-1.5">TCLE</div>
+        </div>
+        <div class="text-center">
+          <div class="display text-[20px] leading-none font-light tab-num text-cobalt">03</div>
+          <div class="text-[9px] uppercase tracking-[0.18em] text-ash mt-1.5">ADM</div>
+        </div>
+        <div class="text-center">
+          <div class="display text-[20px] leading-none font-light tab-num text-plum">02</div>
+          <div class="text-[9px] uppercase tracking-[0.18em] text-ash mt-1.5">altas</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="h-px bg-hairline mx-5"></div>
+
+    <!-- Sector group: UTI 2 -->
+    <section class="px-5 pt-5">
+      <div class="flex items-baseline gap-3 mb-3">
+        <span class="font-mono text-[11px] text-cobalt">04</span>
+        <div class="flex-1 h-px bg-hairline"></div>
+        <span class="display-italic text-[13px] text-ink font-medium">UTI 2</span>
+        <div class="flex-1 h-px bg-hairline"></div>
+        <span class="font-mono text-[11px] text-ash tab-num">6 leitos</span>
+      </div>
+
+      <!-- Patient row : ADM -->
+      <a class="block bg-paper rounded-2xl border border-hairline px-4 py-3.5 mb-2 relative">
+        <div class="absolute left-0 top-5 bottom-5 w-[2px] rounded-full bg-cobalt"></div>
+        <div class="flex items-start gap-4">
+          <div class="text-center pt-0.5">
+            <div class="display text-[26px] leading-none font-light tab-num text-ink">03</div>
+            <div class="text-[8px] uppercase tracking-[0.2em] text-ash mt-1">leito</div>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-[14.5px] font-medium leading-tight text-ink">Emanuel da Mota Silveira Cardoso</p>
+            <p class="text-[11px] text-ash mt-0.5">TCE · admissão há 2h12</p>
+            <div class="flex items-center gap-2 mt-2.5">
+              <span class="pill text-cobalt bg-cobalt/10">ADM</span>
+              <span class="pill text-saffron bg-saffron/10">TCLE pend.</span>
+            </div>
+          </div>
+          <span class="text-ash">›</span>
+        </div>
+      </a>
+
+      <!-- Patient row : SEG -->
+      <a class="block bg-paper rounded-2xl border border-hairline px-4 py-3.5 mb-2 relative">
+        <div class="absolute left-0 top-5 bottom-5 w-[2px] rounded-full bg-moss"></div>
+        <div class="flex items-start gap-4">
+          <div class="text-center pt-0.5">
+            <div class="display text-[26px] leading-none font-light tab-num text-ink">09</div>
+            <div class="text-[8px] uppercase tracking-[0.2em] text-ash mt-1">leito</div>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-[14.5px] font-medium leading-tight text-ink">Nelviton do Nascimento</p>
+            <p class="text-[11px] text-ash mt-0.5">TCE · seguimento dia 3</p>
+            <div class="flex items-center gap-2 mt-2.5">
+              <span class="pill text-moss bg-moss/10">SEG</span>
+              <span class="pill text-moss bg-moss/10">TCLE OK</span>
+            </div>
+          </div>
+          <span class="text-ash">›</span>
+        </div>
+      </a>
+
+      <!-- Patient row : EXCLUSAO -->
+      <a class="block bg-paper-deep/50 rounded-2xl border border-hairline px-4 py-3.5 mb-2 relative">
+        <div class="absolute left-0 top-5 bottom-5 w-[2px] rounded-full bg-slate"></div>
+        <div class="flex items-start gap-4">
+          <div class="text-center pt-0.5">
+            <div class="display text-[26px] leading-none font-light tab-num text-slate">06</div>
+            <div class="text-[8px] uppercase tracking-[0.2em] text-ash mt-1">leito</div>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-[14.5px] font-medium leading-tight text-slate line-through decoration-1">Paulo Marcos Silva Souza</p>
+            <p class="text-[11px] text-ash mt-0.5 italic">excluído · TCE &gt; 48h</p>
+            <div class="flex items-center gap-2 mt-2.5">
+              <span class="pill text-slate bg-slate/10">Exclusão</span>
+            </div>
+          </div>
+          <span class="text-ash/60">›</span>
+        </div>
+      </a>
+
+      <!-- + add to sector -->
+      <button class="mt-2 mb-5 w-full text-left text-[11px] tracking-[0.18em] uppercase text-cobalt flex items-center gap-2">
+        <span class="size-5 rounded-full border border-cobalt/40 flex items-center justify-center">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        </span>
+        Adicionar em UTI 2
+      </button>
+    </section>
+
+    <!-- Sector group: UTI 1 (collapsed) -->
+    <section class="px-5">
+      <div class="flex items-baseline gap-3 mb-3">
+        <span class="font-mono text-[11px] text-ash">03</span>
+        <div class="flex-1 h-px bg-hairline"></div>
+        <span class="display-italic text-[13px] text-graphite font-medium">UTI 1</span>
+        <div class="flex-1 h-px bg-hairline"></div>
+        <span class="font-mono text-[11px] text-ash tab-num">2</span>
+        <span class="text-ash">▾</span>
+      </div>
+    </section>
+
+    <div class="h-px bg-hairline mx-5 mt-2"></div>
+
+    <section class="px-5 mt-2">
+      <div class="flex items-baseline gap-3 mb-3">
+        <span class="font-mono text-[11px] text-ash">05</span>
+        <div class="flex-1 h-px bg-hairline"></div>
+        <span class="display-italic text-[13px] text-graphite font-medium">UI 2 / 3</span>
+        <div class="flex-1 h-px bg-hairline"></div>
+        <span class="font-mono text-[11px] text-ash tab-num">4</span>
+        <span class="text-ash">▾</span>
+      </div>
+    </section>
+
+    <div class="h-32"></div>
+
+    <!-- FAB: novo paciente -->
+    <button class="absolute bottom-24 right-5 inline-flex items-center gap-2.5 pl-3 pr-5 py-3 rounded-full bg-ink text-paper shadow-[0_12px_28px_-8px_rgba(10,22,40,0.55)]">
+      <span class="size-6 rounded-full bg-paper text-ink flex items-center justify-center">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg>
+      </span>
+      <span class="text-[12px] tracking-wide font-medium">Paciente</span>
+    </button>
+
+    <!-- Secondary FAB: import excel -->
+    <button class="absolute bottom-24 left-5 size-12 rounded-full bg-paper border border-hairline shadow-[0_6px_18px_-6px_rgba(10,22,40,0.35)] flex items-center justify-center">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1E3A8A" stroke-width="1.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13l2 2 4-4"/></svg>
+    </button>
+
+    <!-- Bottom nav -->
+    <nav class="absolute inset-x-0 bottom-0 bg-paper border-t border-hairline pt-3 pb-5">
+      <div class="grid grid-cols-2">
+        <button class="flex flex-col items-center gap-1">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1E3A8A" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>
+          <span class="text-[10px] uppercase tracking-[0.2em] font-medium text-cobalt">Plantões</span>
+          <span class="block h-[2px] w-5 bg-cobalt rounded-full mt-0.5"></span>
+        </button>
+        <button class="flex flex-col items-center gap-1">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="1.6"><path d="M21.4 11.05 12.2 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.19 9.19a2 2 0 0 1-2.83-2.83l8.49-8.49"/></svg>
+          <span class="text-[10px] uppercase tracking-[0.2em] text-ash">Anexos</span>
+          <span class="block h-[2px] w-5 bg-transparent mt-0.5"></span>
+        </button>
+      </div>
+    </nav>
+  </div>
+
+  <p class="mt-4 text-[11px] text-ash max-w-[440px] text-center leading-relaxed">
+    Leito como numeral display Fraunces (âncora visual). Status como filete colorido de 2px no canto esquerdo
+    (lido perifericamente, sem ocupar espaço). Setor com regra editorial dupla + numeral mono. Pacientes
+    excluídos sutilmente diminuídos (tipografia + line-through fino).
+  </p>
+</div>
+</body>
+</html>
