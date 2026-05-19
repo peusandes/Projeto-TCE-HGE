@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 export type GoseLembrete = {
   paciente_id: string;
   paciente_nome: string;
-  /** Data base do cálculo — admissão hospitalar (hora_admissao do historia_admissao). */
+  /** Data base do cálculo — primeiro plantão em que o paciente apareceu (≈ admissão). */
   data_admissao: string; // ISO date (yyyy-MM-dd)
   janela: 30 | 90 | 180;
   data_alvo: string; // ISO date — quando o GOS-E vence
@@ -35,71 +35,89 @@ function diasEntre(a: string, b: string): number {
 }
 
 /**
- * Retorna a lista de lembretes GOS-E pendentes (janelas que já venceram e que
- * o paciente ainda NÃO completou o instrumento gose_Nd). Inclui pacientes
- * em qualquer situação exceto EXCLUSAO.
+ * Lembretes GOS-E pendentes. Janela conta a partir do PRIMEIRO PLANTÃO
+ * em que o paciente apareceu (= data de admissão na prática). NÃO depende
+ * de nenhum form REDCap estar preenchido — só do paciente existir no mapa.
  *
- * Base do cálculo: hora_admissao (data hospitalar). Antes era hora_trauma,
- * mas trauma muitas vezes não está preenchido e admissão sempre está —
- * mudança feita a pedido do orientador (2026-05-19).
+ * Lembrete aparece se:
+ *  - paciente não está em EXCLUSAO
+ *  - janela 30/90/180 já venceu (passou da admissão + Nd)
+ *  - coleta gose_Nd não está COMPLETE
+ *
+ * Telefones (se houver) vem das coletas dados_demograficos/alta — opcional.
  */
 export async function listGoseLembretes(): Promise<GoseLembrete[]> {
   const supabase = createClient();
   const hoje = new Date().toISOString().slice(0, 10);
 
-  // 1) Pacientes com hora_trauma e contatos.
-  // Faz join via consultas em paralelo pra evitar N+1 no fetch.
-  const { data: coletas, error: errColetas } = await supabase
+  // 1) Todos os pacientes não-excluídos
+  const { data: pacientes, error: errPac } = await supabase
+    .from("pacientes")
+    .select("id, nome, situacao")
+    .neq("situacao", "EXCLUSAO");
+  if (errPac) throw errPac;
+  const pacs = (pacientes ?? []) as Array<{
+    id: string;
+    nome: string;
+    situacao: string;
+  }>;
+  if (pacs.length === 0) return [];
+
+  const ids = pacs.map((p) => p.id);
+
+  // 2) Pra cada paciente, descobre data do PRIMEIRO plantão (data ascendente).
+  //    Faz uma query única juntando mapa_entries com plantoes.
+  const { data: entries, error: errEnt } = await supabase
+    .from("mapa_entries")
+    .select("paciente_id, plantoes(data)")
+    .in("paciente_id", ids);
+  if (errEnt) throw errEnt;
+
+  type Row = {
+    paciente_id: string;
+    plantoes: { data: string } | { data: string }[] | null;
+  };
+  const primeiroPlantao = new Map<string, string>(); // paciente_id → data
+  for (const row of (entries ?? []) as Row[]) {
+    const plant = Array.isArray(row.plantoes) ? row.plantoes[0] : row.plantoes;
+    if (!plant?.data) continue;
+    const atual = primeiroPlantao.get(row.paciente_id);
+    if (!atual || plant.data < atual) {
+      primeiroPlantao.set(row.paciente_id, plant.data);
+    }
+  }
+
+  // 3) Coletas REDCap (só pra checar status do gose_Nd + pegar telefones).
+  const { data: coletas } = await supabase
     .from("coletas_redcap")
     .select("paciente_id, tipo, dados, status")
+    .in("paciente_id", ids)
     .in("tipo", [
-      "historia_admissao",
       "dados_demograficos",
+      "alta",
       "gose_30d",
       "gose_90d",
       "gose_180d",
-      "alta",
     ]);
-  if (errColetas) throw errColetas;
-
   type Coleta = {
     paciente_id: string;
     tipo: string;
     dados: Record<string, unknown>;
     status: string;
   };
-  const todas = (coletas ?? []) as Coleta[];
-
-  // Indexa por paciente
   const porPaciente = new Map<string, Coleta[]>();
-  for (const c of todas) {
+  for (const c of (coletas ?? []) as Coleta[]) {
     const arr = porPaciente.get(c.paciente_id) ?? [];
     arr.push(c);
     porPaciente.set(c.paciente_id, arr);
   }
 
-  if (porPaciente.size === 0) return [];
-
-  // 2) Buscar nomes dos pacientes envolvidos.
-  const ids = [...porPaciente.keys()];
-  const { data: pacientes } = await supabase
-    .from("pacientes")
-    .select("id, nome, situacao")
-    .in("id", ids);
-  const nomePorId = new Map<string, { nome: string; situacao: string }>(
-    (pacientes ?? []).map((p) => [
-      p.id as string,
-      { nome: p.nome as string, situacao: p.situacao as string },
-    ]),
-  );
-
-  // 3) Buscar tentativas anteriores.
+  // 4) Tentativas anteriores
   const { data: tents } = await supabase
     .from("gose_tentativas")
     .select("paciente_id, janela, tentado_em, observacao")
     .in("paciente_id", ids)
     .order("tentado_em", { ascending: false });
-
   type Tent = {
     paciente_id: string;
     janela: number;
@@ -108,30 +126,21 @@ export async function listGoseLembretes(): Promise<GoseLembrete[]> {
   };
   const tentsAll = (tents ?? []) as Tent[];
 
-  // 4) Compor lembretes.
+  // 5) Compor lembretes.
   const lembretes: GoseLembrete[] = [];
-  for (const [pid, lista] of porPaciente.entries()) {
-    const info = nomePorId.get(pid);
-    if (!info) continue;
-    // Excluídos/óbito não recebem ligação. EXCLUSAO já cobre auto-removidos.
-    if (info.situacao === "EXCLUSAO") continue;
-
-    const historia = lista.find((c) => c.tipo === "historia_admissao");
-    const admissaoRaw = historia?.dados?.hora_admissao as string | undefined;
-    if (!admissaoRaw) continue;
-    // hora_admissao é datetime; extrai só a data.
-    const dataAdmissao = admissaoRaw.slice(0, 10);
+  for (const p of pacs) {
+    const dataAdmissao = primeiroPlantao.get(p.id);
+    if (!dataAdmissao) continue; // paciente sem nenhum mapa_entry
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dataAdmissao)) continue;
 
-    // Telefones — preferência: alta (mais atualizado), fallback dados_demograficos.
+    const lista = porPaciente.get(p.id) ?? [];
+    // Telefones: alta (mais atualizado) > demográfico
     const alta = lista.find((c) => c.tipo === "alta");
     const demo = lista.find((c) => c.tipo === "dados_demograficos");
     const fonte = (alta?.dados ?? demo?.dados ?? {}) as Record<string, unknown>;
     const telefones = (["contato_1", "contato_2", "contato_3"] as const)
       .map((k) => fonte[k])
-      .filter(
-        (v): v is string => typeof v === "string" && v.trim().length > 0,
-      );
+      .filter((v): v is string => typeof v === "string" && v.trim().length > 0);
 
     for (const janela of JANELAS) {
       const tipoColeta = TIPO_POR_JANELA[janela];
@@ -143,7 +152,7 @@ export async function listGoseLembretes(): Promise<GoseLembrete[]> {
 
       const diasAtraso = diasEntre(dataAlvo, hoje);
       const tentsDestaJanela = tentsAll.filter(
-        (t) => t.paciente_id === pid && t.janela === janela,
+        (t) => t.paciente_id === p.id && t.janela === janela,
       );
       const ultima = tentsDestaJanela[0]
         ? {
@@ -153,8 +162,8 @@ export async function listGoseLembretes(): Promise<GoseLembrete[]> {
         : null;
 
       lembretes.push({
-        paciente_id: pid,
-        paciente_nome: info.nome,
+        paciente_id: p.id,
+        paciente_nome: p.nome,
         data_admissao: dataAdmissao,
         janela,
         data_alvo: dataAlvo,

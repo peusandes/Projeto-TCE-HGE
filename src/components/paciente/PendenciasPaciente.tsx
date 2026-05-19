@@ -76,16 +76,8 @@ export function PendenciasPaciente({ paciente, coletas, anexos }: Props) {
     });
   }
 
-  // 6) Histórico admissão sem hora_admissao preenchida (GOS-E vai falhar
-  //    de calcular — janela 30/90/180 conta da admissão).
-  const histColeta = coletas.find((c) => c.instrument === "historia_admissao");
-  if (histColeta && !histColeta.data.hora_admissao) {
-    pendencias.push({
-      level: "warning",
-      text:
-        "Histórico da admissão sem hora de admissão — GOS-E 30/90/180 não vai aparecer nos lembretes.",
-    });
-  }
+  // Pendência removida — GOS-E agora não depende mais de hora_admissao/trauma
+  // (calcula a partir do 1º plantão em que o paciente apareceu).
 
   // 7) Coletas marcadas REDCap mas record_id (redcap_id no paciente) vazio.
   const algumaComplete = coletas.some((c) => c.status === "COMPLETE");
