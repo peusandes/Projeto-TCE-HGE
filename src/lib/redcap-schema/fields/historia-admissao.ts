@@ -94,7 +94,14 @@ export const HISTORIA_ADMISSAO: InstrumentDef = {
     },
 
     // AIS
-    { name: "_h_ais", label: "Abbreviated Injury Scale (AIS)", type: "descriptive", section: "header", content: "" },
+    {
+      name: "_h_ais",
+      label: "Abbreviated Injury Scale (AIS)",
+      type: "descriptive",
+      section: "header",
+      content: "",
+      helpUrl: "https://docs.google.com/document/d/1LnXTBE50BYgQ6gM2FEe_-AbhOGOqYzHeUrPbZBJXdug/edit?usp=sharing",
+    },
     { name: "geral_ais",          label: "AIS geral",                type: "number", min: 0, max: 6, integer: true, required: true },
     { name: "cabeca_pescoco_ais", label: "AIS cabeça/pescoço",       type: "number", min: 0, max: 6, integer: true, required: true },
     { name: "face_ais",           label: "AIS face",                 type: "number", min: 0, max: 6, integer: true, required: true },

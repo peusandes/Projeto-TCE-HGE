@@ -1,6 +1,6 @@
 "use client";
 
-import { Calculator, Info } from "lucide-react";
+import { Calculator, Info, BookOpen, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import {
@@ -28,9 +28,23 @@ export function RedcapField({ field, value, onChange, ctx }: Props) {
     if (field.section === "header") {
       return (
         <div className="pt-3 pb-1">
-          <h3 className="text-[11px] uppercase tracking-editorial text-cobalt-soft font-semibold">
-            {field.label}
-          </h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-[11px] uppercase tracking-editorial text-cobalt-soft font-semibold">
+              {field.label}
+            </h3>
+            {field.helpUrl && (
+              <a
+                href={field.helpUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-md border border-cobalt/30 bg-cobalt/[0.06] px-2 py-1 text-[10px] uppercase tracking-editorial text-cobalt-soft hover:bg-cobalt/[0.12] transition-colors"
+              >
+                <BookOpen className="h-3 w-3" strokeWidth={2} />
+                Como fazer
+                <ExternalLink className="h-2.5 w-2.5 opacity-70" strokeWidth={2} />
+              </a>
+            )}
+          </div>
           <div className="h-px bg-hairline mt-2" />
         </div>
       );

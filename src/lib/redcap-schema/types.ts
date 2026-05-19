@@ -64,6 +64,9 @@ export type FieldDef = {
 
   /** Placeholder. */
   placeholder?: string;
+
+  /** URL externa de ajuda (ex.: guia AIS no Google Docs). Em headers vira um botão "Como fazer". */
+  helpUrl?: string;
 };
 
 export type InstrumentId =
