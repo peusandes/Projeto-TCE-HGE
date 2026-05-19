@@ -375,7 +375,7 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
     });
   }
 
-  async function uploadOne(i: number) {
+  async function uploadOne(i: number): Promise<"done" | "error"> {
     const f = files[i];
     const edit = editStates[i] ?? EMPTY_EDIT;
     setStatusAt(i, "uploading");
@@ -432,9 +432,11 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
       });
       if (insertErr) throw insertErr;
       setStatusAt(i, "done");
+      return "done";
     } catch (err) {
       console.error(`[anexo] ${f.name} falhou:`, err);
       setStatusAt(i, "error");
+      return "error";
     } finally {
       clearTimeout(timeoutId);
       abortRefs.current.delete(i);
@@ -476,30 +478,31 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
       statusesRef.current = resetNext;
       setStatuses(resetNext);
 
-      // Pool de workers concorrentes.
+      // Pool de workers concorrentes. Coleta resultados DIRETO do retorno
+      // do uploadOne (mais confiável que ler de ref/state, que sofrem com
+      // batching do React 18 + useTransition).
+      const results: Array<"done" | "error"> = [];
       const queue = [...targets];
-      const pool: Promise<void>[] = [];
-      const runNext = (): Promise<void> | null => {
-        const i = queue.shift();
-        if (i === undefined) return null;
-        return uploadOne(i).then(() => {
-          const next = runNext();
-          if (next) return next;
-        });
+      const runNext = async (): Promise<void> => {
+        // Loop em vez de recursão pra evitar pegadinhas de Promise chaining
+        // (especialmente com `return next` em .then).
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const i = queue.shift();
+          if (i === undefined) return;
+          const r = await uploadOne(i);
+          results.push(r);
+        }
       };
-
+      const pool: Promise<void>[] = [];
       for (let n = 0; n < Math.min(CONCURRENCY, targets.length); n++) {
-        const t = runNext();
-        if (t) pool.push(t);
+        pool.push(runNext());
       }
       await Promise.all(pool);
 
-      // Lê do ref síncrono (setStatuses dentro de useTransition pode estar
-      // pendente — usar a callback de setStatuses pra ler era frágil).
-      const curr = statusesRef.current;
-      const ok = curr.filter((s) => s === "done").length;
-      const err = curr.filter((s) => s === "error").length;
-      const total = curr.length;
+      const ok = results.filter((r) => r === "done").length;
+      const err = results.filter((r) => r === "error").length;
+      const total = targets.length;
 
       if (ok > 0 && err === 0) {
         toast.success(total === 1 ? "Anexo enviado" : `${ok} anexos enviados`);
@@ -532,18 +535,17 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
     startTransition(async () => {
       idxs.forEach((i) => setStatusAt(i, "queued"));
       const queue = [...idxs];
-      const pool: Promise<void>[] = [];
-      const runNext = (): Promise<void> | null => {
-        const i = queue.shift();
-        if (i === undefined) return null;
-        return uploadOne(i).then(() => {
-          const next = runNext();
-          if (next) return next;
-        });
+      const runNext = async (): Promise<void> => {
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const i = queue.shift();
+          if (i === undefined) return;
+          await uploadOne(i);
+        }
       };
+      const pool: Promise<void>[] = [];
       for (let n = 0; n < Math.min(CONCURRENCY, idxs.length); n++) {
-        const t = runNext();
-        if (t) pool.push(t);
+        pool.push(runNext());
       }
       await Promise.all(pool);
       router.refresh();
