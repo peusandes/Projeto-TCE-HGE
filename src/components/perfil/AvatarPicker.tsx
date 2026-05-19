@@ -32,19 +32,28 @@ export function AvatarPicker({ userId, avatarUrl }: Props) {
 
     startTransition(async () => {
       try {
-        // Comprime pra <500KB / 512x512 (avatar não precisa de mais)
-        const compressed = await imageCompression(f, {
-          maxSizeMB: 0.5,
-          maxWidthOrHeight: 512,
-          useWebWorker: true,
-        });
-        const ext = f.name.split(".").pop()?.toLowerCase() || "jpg";
+        // Tenta comprimir; se o browser não decoda o formato (ex.: HEIC do iPhone
+        // que Canvas API não suporta), faz upload do original direto.
+        let toUpload: File | Blob = f;
+        try {
+          toUpload = await imageCompression(f, {
+            maxSizeMB: 0.5,
+            maxWidthOrHeight: 512,
+            useWebWorker: true,
+          });
+        } catch (compressErr) {
+          console.warn("Compressão falhou, enviando original:", compressErr);
+        }
+
+        // HEIC → muda extensão para refletir o que o navegador realmente vê
+        const isHeic = /\.(heic|heif)$/i.test(f.name) || /heic|heif/i.test(f.type);
+        const ext = isHeic ? "heic" : (f.name.split(".").pop()?.toLowerCase() || "jpg");
         const path = `${userId}/avatar.${ext}`;
         const supabase = createClient();
         const { error: upErr } = await supabase.storage
           .from("avatares")
-          .upload(path, compressed, {
-            contentType: compressed.type || "image/jpeg",
+          .upload(path, toUpload, {
+            contentType: (toUpload as Blob).type || f.type || "image/jpeg",
             upsert: true,
           });
         if (upErr) throw new Error(upErr.message);
