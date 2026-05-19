@@ -19,7 +19,10 @@ import { CredentialCard } from "@/components/manual/CredentialCard";
 import { MapaCollapsible } from "@/components/manual/MapaCollapsible";
 
 export const metadata = { title: "Manual de coleta — LANC TCE" };
-export const dynamic = "force-static";
+// Não pode ser force-static: o layout (app) carrega o AppHeader que chama
+// getCurrentPesquisador → Supabase client. As envs NEXT_PUBLIC_SUPABASE_*
+// só existem em runtime no Vercel, então o prerender quebra.
+export const dynamic = "force-dynamic";
 
 const SETORES_HGE = [
   { nome: "OBS 1", local: "Subsolo 1 · HGE 1", pcs: 1, pcsNota: "" },
