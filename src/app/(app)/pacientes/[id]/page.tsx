@@ -51,6 +51,19 @@ export default async function PacientePage({
     listColetasDoPaciente(paciente.id),
   ]);
 
+  // Calcula progresso REDCap: % de instrumentos com pelo menos 1 seq COMPLETE.
+  // Total = 11 (status_de_admisso, dados_demograficos, historia_pregressa,
+  // historia_admissao, neuroimagem_admissao, seguimento, dados_de_cirurgia,
+  // alta, gose_30d, gose_90d, gose_180d).
+  const TOTAL_INSTRUMENTOS = 11;
+  const instrumentosCompletos = new Set<string>();
+  for (const c of coletas) {
+    if (c.status === "COMPLETE") instrumentosCompletos.add(c.instrument);
+  }
+  const completudePct = Math.round(
+    (instrumentosCompletos.size / TOTAL_INSTRUMENTOS) * 100,
+  );
+
   const plantaoLabel = plantao
     ? format(new Date(plantao.data + "T12:00:00"), "dd 'de' MMM", { locale: ptBR })
     : "";
@@ -82,13 +95,24 @@ export default async function PacientePage({
             <span className="size-1.5 rounded-full bg-cobalt-soft" />
             {SITUACAO_LABEL[paciente.situacao]}
           </span>
+          {/* Progresso REDCap — instrumentos completos / total */}
+          <span
+            className={`inline-flex items-center gap-1.5 px-2 py-[3px] rounded-full text-[10px] uppercase tracking-[0.08em] font-medium leading-none border ${
+              completudePct === 100
+                ? "text-moss bg-moss/10 border-moss/30"
+                : completudePct >= 50
+                  ? "text-cobalt-soft bg-cobalt/10 border-cobalt/25"
+                  : "text-ash bg-paper-soft border-hairline"
+            }`}
+          >
+            REDCap {instrumentosCompletos.size}/{TOTAL_INSTRUMENTOS}
+            <span className="font-mono opacity-70">· {completudePct}%</span>
+          </span>
           {paciente.redcap_id ? (
             <span className="font-mono text-[10px] text-graphite ml-1">
-              REDCap #{paciente.redcap_id}
+              ID #{paciente.redcap_id}
             </span>
-          ) : (
-            <span className="font-mono text-[10px] text-ash ml-1">REDCap —</span>
-          )}
+          ) : null}
         </div>
       </section>
 

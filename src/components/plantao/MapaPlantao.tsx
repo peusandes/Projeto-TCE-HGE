@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, FileSpreadsheet, ChevronDown } from "lucide-react";
+import { Plus, FileSpreadsheet, ChevronDown, Search, X } from "lucide-react";
 import { PacienteCard } from "./PacienteCard";
 import { NovoPacienteDrawer } from "./NovoPacienteDrawer";
 import { ExcelImportSheet } from "./ExcelImportSheet";
@@ -44,14 +44,26 @@ export function MapaPlantao({
   const [collapsed, setCollapsed] = useState<Set<Setor>>(new Set());
   /** Quando setado, só renderiza pacientes com paciente_id nesse Set. */
   const [filterIds, setFilterIds] = useState<Set<string> | null>(null);
+  const [query, setQuery] = useState("");
 
-  const filteredMapa = useMemo(
-    () =>
-      filterIds === null
-        ? mapa
-        : mapa.filter((m) => filterIds.has(m.paciente_id)),
-    [mapa, filterIds],
-  );
+  const filteredMapa = useMemo(() => {
+    const norm = (s: string) =>
+      s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+    const q = query.trim();
+    let base = mapa;
+    if (filterIds !== null) base = base.filter((m) => filterIds.has(m.paciente_id));
+    if (q.length > 0) {
+      const nq = norm(q);
+      base = base.filter((m) => {
+        const nome = m.pacientes?.nome ?? "";
+        if (norm(nome).includes(nq)) return true;
+        if (m.leito && norm(m.leito).includes(nq)) return true;
+        if (m.descricao && norm(m.descricao).includes(nq)) return true;
+        return false;
+      });
+    }
+    return base;
+  }, [mapa, filterIds, query]);
 
   const grupos = useMemo(() => {
     const map = new Map<Setor, MapaItem[]>();
@@ -74,6 +86,35 @@ export function MapaPlantao({
   return (
     <>
       <PendenciasFiltros mapa={mapa} onFilterChange={setFilterIds} />
+
+      {/* Busca inline — útil em plantões grandes (15+ pacientes) */}
+      {mapa.length >= 6 && (
+        <div className="relative pt-2">
+          <Search
+            className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ash pointer-events-none"
+            strokeWidth={1.8}
+          />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar paciente no mapa..."
+            className="w-full h-10 pl-9 pr-9 rounded-md bg-paper-deep border border-hairline text-[13px] focus:outline-none focus:border-cobalt"
+            autoComplete="off"
+          />
+          {query.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="Limpar busca"
+              className="absolute right-2 top-1/2 -translate-y-1/2 size-8 rounded-md flex items-center justify-center text-ash hover:text-ink"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="space-y-1">
         {SETORES.map((setor) => {
           const itens = grupos.get(setor) ?? [];
