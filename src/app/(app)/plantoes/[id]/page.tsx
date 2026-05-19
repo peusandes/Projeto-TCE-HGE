@@ -5,9 +5,11 @@ import { ptBR } from "date-fns/locale";
 import { ChevronLeft, Lock } from "lucide-react";
 import { getPlantao, getMapaDoPlantao } from "@/lib/data/plantoes";
 import { getCurrentPesquisador } from "@/lib/data/pesquisadores";
+import { listGoseLembretes } from "@/lib/data/gose-reminders";
 import { MapaPlantao } from "@/components/plantao/MapaPlantao";
 import { FinalizarPlantaoButton } from "@/components/plantao/FinalizarPlantaoButton";
 import { ExcluirPlantaoButton } from "@/components/plantao/ExcluirPlantaoButton";
+import { GoseRemindersBanner } from "@/components/plantao/GoseRemindersBanner";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +20,10 @@ export default async function PlantaoDetailPage({
 }) {
   const plantao = await getPlantao(params.id);
   if (!plantao) notFound();
-  const [mapa, me] = await Promise.all([
+  const [mapa, me, lembretes] = await Promise.all([
     getMapaDoPlantao(plantao.id),
     getCurrentPesquisador(),
+    listGoseLembretes(),
   ]);
 
   const date = new Date(plantao.data + "T12:00:00");
@@ -94,6 +97,13 @@ export default async function PlantaoDetailPage({
           <Stat label="Altas" value={altas} tone="plum" />
         </div>
       </section>
+
+      {/* Lembretes GOS-E — só aparece quando há pendências (já vencidas). */}
+      {lembretes.length > 0 && (
+        <div className="pt-2">
+          <GoseRemindersBanner lembretes={lembretes} />
+        </div>
+      )}
 
       <div className="h-px bg-hairline my-4" />
 
