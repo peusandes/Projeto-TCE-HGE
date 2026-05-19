@@ -16,6 +16,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { CredentialCard } from "@/components/manual/CredentialCard";
+import { MapaCollapsible } from "@/components/manual/MapaCollapsible";
 
 export const metadata = { title: "Manual de coleta — LANC TCE" };
 export const dynamic = "force-static";
@@ -112,6 +113,48 @@ export default function ManualPage() {
             </ul>
           </CriteriaCard>
         </div>
+      </Section>
+
+      {/* MAPAS DO HGE */}
+      <Section
+        eyebrow="Visão espacial"
+        title="Mapas do HGE"
+        description="O HGE são dois prédios desnivelados conectados: o subsolo 1 do HGE 1 fica no mesmo nível do andar 0 (térreo) do HGE 2. Toque pra abrir cada mapa."
+        accent="cobalt"
+      >
+        <MapaCollapsible
+          title="HGE 1 — Andar 0 (térreo)"
+          subtitle="Entrada principal · elevadores · RH · CEP (crachás)"
+          imageSrc="/manual/hge1-terreo.png"
+          imageAlt="Mapa do térreo do HGE 1 mostrando entrada principal, dois elevadores, RH e o CEP onde pegar o crachá"
+          legend={
+            <>
+              Entra pela <strong>entrada principal</strong>, pega o elevador
+              mais próximo e sobe até o <strong>RH</strong>. O{" "}
+              <strong>CEP</strong> fica ao lado do RH — é onde você retira o{" "}
+              <strong>crachá</strong> antes de começar o plantão.
+            </>
+          }
+          aspectRatio={1620 / 1000}
+        />
+
+        <MapaCollapsible
+          title="Conexão HGE 1 ↔ HGE 2"
+          subtitle="Andar 0 do HGE 2 = Subsolo 1 do HGE 1 · UTIs · OBS 1 · CC"
+          imageSrc="/manual/hge1-hge2-conexao.png"
+          imageAlt="Mapa mostrando como o HGE 1 e HGE 2 se conectam — UTI 2 e UTI 3 ficam no HGE 2, UTI 1, OBS 1, Sala Amarela e Vermelha no HGE 1, com auditório e elevadores na junção"
+          legend={
+            <>
+              Os dois prédios estão <strong>desnivelados</strong>: ande no
+              subsolo 1 do HGE 1 e você entra direto no térreo do HGE 2 pela
+              passagem com o <strong>auditório</strong>. Daí o lado esquerdo
+              tem <strong>UTI 2 e UTI 3</strong> (HGE 2), e o direito tem{" "}
+              <strong>UTI 1, OBS 1, salas amarela e vermelha</strong> (HGE 1),
+              indo até a <strong>entrada da emergência</strong>.
+            </>
+          }
+          aspectRatio={1430 / 1100}
+        />
       </Section>
 
       {/* ESTRUTURA DO HGE */}
