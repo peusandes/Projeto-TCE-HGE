@@ -5,6 +5,7 @@ import { Plus, FileSpreadsheet, ChevronDown } from "lucide-react";
 import { PacienteCard } from "./PacienteCard";
 import { NovoPacienteDrawer } from "./NovoPacienteDrawer";
 import { ExcelImportSheet } from "./ExcelImportSheet";
+import { PendenciasFiltros } from "./PendenciasFiltros";
 import {
   SETORES,
   SETOR_LABEL,
@@ -41,13 +42,23 @@ export function MapaPlantao({
   const [novoSetor, setNovoSetor] = useState<Setor | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<Setor>>(new Set());
+  /** Quando setado, só renderiza pacientes com paciente_id nesse Set. */
+  const [filterIds, setFilterIds] = useState<Set<string> | null>(null);
+
+  const filteredMapa = useMemo(
+    () =>
+      filterIds === null
+        ? mapa
+        : mapa.filter((m) => filterIds.has(m.paciente_id)),
+    [mapa, filterIds],
+  );
 
   const grupos = useMemo(() => {
     const map = new Map<Setor, MapaItem[]>();
     SETORES.forEach((s) => map.set(s, []));
-    for (const item of mapa) map.get(item.setor)?.push(item);
+    for (const item of filteredMapa) map.get(item.setor)?.push(item);
     return map;
-  }, [mapa]);
+  }, [filteredMapa]);
 
   function toggle(setor: Setor) {
     setCollapsed((prev) => {
@@ -62,6 +73,7 @@ export function MapaPlantao({
 
   return (
     <>
+      <PendenciasFiltros mapa={mapa} onFilterChange={setFilterIds} />
       <div className="space-y-1">
         {SETORES.map((setor) => {
           const itens = grupos.get(setor) ?? [];
