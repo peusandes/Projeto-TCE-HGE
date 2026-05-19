@@ -45,6 +45,8 @@ export type GroupedPacientes = {
   seguimento: Paciente[];
   excluidos: Paciente[];
   altaNoMapa: Paciente[];
+  /** Pacientes com situacao=ALTA que NÃO estão mais no mapa do plantão atual. */
+  altaForaDoMapa: Paciente[];
   historico: Paciente[];
   latestPlantaoData: string | null;
 };
@@ -94,12 +96,15 @@ export async function listAllPacientesAgrupados(): Promise<GroupedPacientes> {
   const seguimento: Paciente[] = [];
   const excluidos: Paciente[] = [];
   const altaNoMapa: Paciente[] = [];
+  const altaForaDoMapa: Paciente[] = [];
   const historico: Paciente[] = [];
 
   for (const p of (pacientes ?? []) as Paciente[]) {
     const inMapa = inMapaIds.has(p.id);
     if (!inMapa) {
-      historico.push(p);
+      // Fora do mapa do último plantão: separa ALTA do resto do histórico.
+      if (p.situacao === "ALTA") altaForaDoMapa.push(p);
+      else historico.push(p);
       continue;
     }
     // PENDENTE_HGE tem prioridade sobre situacao — o pesquisador precisa
@@ -120,6 +125,7 @@ export async function listAllPacientesAgrupados(): Promise<GroupedPacientes> {
     seguimento,
     excluidos,
     altaNoMapa,
+    altaForaDoMapa,
     historico,
     latestPlantaoData: latest?.data ?? null,
   };

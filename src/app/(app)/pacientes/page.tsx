@@ -15,6 +15,7 @@ export default async function PacientesIndexPage() {
     seguimento,
     excluidos,
     altaNoMapa,
+    altaForaDoMapa,
     historico,
     latestPlantaoData,
   } = await listAllPacientesAgrupados();
@@ -25,6 +26,7 @@ export default async function PacientesIndexPage() {
     internadosCount +
     excluidos.length +
     altaNoMapa.length +
+    altaForaDoMapa.length +
     historico.length;
   const latestLabel = latestPlantaoData
     ? format(new Date(latestPlantaoData + "T12:00:00"), "dd 'de' MMM", { locale: ptBR })
@@ -102,6 +104,12 @@ export default async function PacientesIndexPage() {
         title="Alta — ainda no mapa atual"
         subtitle="Saíram, mas ainda aparecem no plantão de hoje."
         pacientes={altaNoMapa}
+      />
+
+      <Section
+        title="Altas fora do mapa atual"
+        subtitle="Tiveram alta em plantões anteriores e saíram do mapa."
+        pacientes={altaForaDoMapa}
       />
 
       <Section
