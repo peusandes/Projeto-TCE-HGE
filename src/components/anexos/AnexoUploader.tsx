@@ -21,7 +21,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { format, addDays, parseISO, isValid } from "date-fns";
 import imageCompression from "browser-image-compression";
 import { useRouter } from "next/navigation";
 import {
@@ -139,6 +139,13 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
   const [tipo, setTipo] = useState<TipoAnexo | "">("");
   const [dataRef, setDataRef] = useState(format(new Date(), "yyyy-MM-dd"));
   const [descricao, setDescricao] = useState("");
+  /**
+   * Datas individuais por arquivo. Usado SÓ pra HGT quando há múltiplas fotos
+   * (caso: HGT do dia 15, 16, 17 num lote). Pra qualquer outro tipo a data
+   * compartilhada (dataRef) é usada uniformemente.
+   * Sempre sync'd com files.length.
+   */
+  const [perFileDates, setPerFileDates] = useState<string[]>([]);
   const [pending, startTransition] = useTransition();
   const cameraInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -153,6 +160,42 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
     () => tipo !== "" && TIPO_REQUER_DATA.includes(tipo as TipoAnexo),
     [tipo],
   );
+
+  /**
+   * HGT em lote: cada foto vira um anexo separado com data própria, em
+   * sequência partindo da data base. Caso clássico: HGT do dia 15, 16, 17
+   * num único lote de 3 fotos.
+   */
+  const isHGTBatch = tipo === "HGT" && files.length > 1;
+
+  /**
+   * Auto-fill das datas por arquivo quando entra modo HGT batch ou quando
+   * a data base muda. Sobrescreve eventuais edições anteriores — comportamento
+   * documentado no helper text da UI.
+   */
+  useEffect(() => {
+    if (!isHGTBatch) {
+      // Limpa pra evitar consumir memória/render quando não tá em uso.
+      if (perFileDates.length > 0) setPerFileDates([]);
+      return;
+    }
+    const base = dataRef && isValid(parseISO(dataRef)) ? parseISO(dataRef) : new Date();
+    const next = files.map((_, i) => format(addDays(base, i), "yyyy-MM-dd"));
+    // Evita rerender redundante.
+    const same =
+      next.length === perFileDates.length &&
+      next.every((d, i) => d === perFileDates[i]);
+    if (!same) setPerFileDates(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHGTBatch, dataRef, files.length]);
+
+  function updatePerFileDate(index: number, newDate: string) {
+    setPerFileDates((prev) => {
+      const next = [...prev];
+      next[index] = newDate;
+      return next;
+    });
+  }
 
   const totalBytes = useMemo(
     () => files.reduce((acc, f) => acc + f.size, 0),
@@ -395,10 +438,13 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
       const { blob, mimeType, outName } = await processOne(f, edit);
       if (controller.signal.aborted) throw controller.signal.reason ?? new Error("Abortado");
 
+      // Pra HGT em lote, cada foto tem sua própria data; senão usa a base.
+      const dataDestaFoto = isHGTBatch && perFileDates[i] ? perFileDates[i] : dataRef || null;
+
       const path = buildStoragePath({
         paciente_id: paciente.id,
         tipo_anexo: tipo as TipoAnexo,
-        data_referencia: dataRef || null,
+        data_referencia: dataDestaFoto,
         filename: outName,
       });
 
@@ -424,7 +470,7 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
         plantao_id: paciente.plantao_id,
         storage_path: path,
         tipo_anexo: tipo,
-        data_referencia: dataRef || null,
+        data_referencia: dataDestaFoto,
         descricao: descricao || null,
         mime_type: mimeType || "application/octet-stream",
         tamanho_bytes: blob.size,
@@ -713,7 +759,7 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
 
             <div className="space-y-2">
               <Label htmlFor="dataref" className={FIELD_LABEL}>
-                Data de referência
+                {isHGTBatch ? "Data do primeiro HGT" : "Data de referência"}
                 {requerData && <span className="ml-1 text-vermillion">*</span>}
               </Label>
               <Input
@@ -727,11 +773,24 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
                 )}
               />
               <p className="text-[11px] text-ash">
-                {requerData
-                  ? "Dia em que o exame/registro foi feito. Pode ter mais de um por dia."
-                  : "Opcional — padrão é hoje."}
+                {isHGTBatch
+                  ? "Define a data base. Os HGTs seguintes são autopreenchidos em sequência abaixo — você pode editar cada um."
+                  : requerData
+                    ? "Dia em que o exame/registro foi feito. Pode ter mais de um por dia."
+                    : "Opcional — padrão é hoje."}
               </p>
             </div>
+
+            {/* HGT em lote: data por foto */}
+            {isHGTBatch && (
+              <PerFileDates
+                files={files}
+                perFileDates={perFileDates}
+                activeIndex={activeIndex}
+                onActivate={setActiveIndex}
+                onChange={updatePerFileDate}
+              />
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="desc" className={FIELD_LABEL}>
@@ -1064,6 +1123,74 @@ function ThumbItem({
           <X className="h-3 w-3" strokeWidth={2} />
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * Lista de datas individuais por arquivo (usado pra HGT em lote).
+ * O usuário pode editar cada data; um clique no item ativa o arquivo
+ * correspondente no editor acima pra contexto visual.
+ */
+function PerFileDates({
+  files,
+  perFileDates,
+  activeIndex,
+  onActivate,
+  onChange,
+}: {
+  files: File[];
+  perFileDates: string[];
+  activeIndex: number;
+  onActivate: (i: number) => void;
+  onChange: (i: number, date: string) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-cobalt/20 bg-cobalt/[0.04] p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] uppercase tracking-editorial text-cobalt-soft font-semibold">
+          HGT — Data por foto
+        </span>
+        <span className="text-[10px] text-ash">·</span>
+        <span className="text-[10px] text-ash">
+          {files.length} HGTs no lote
+        </span>
+      </div>
+      <ul className="space-y-1.5">
+        {files.map((f, i) => {
+          const active = i === activeIndex;
+          const date = perFileDates[i] ?? "";
+          return (
+            <li key={`${f.name}-${i}`} className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onActivate(i)}
+                className={cn(
+                  "size-6 rounded-md font-mono text-[11px] flex items-center justify-center shrink-0 transition-colors",
+                  active
+                    ? "bg-cobalt text-white"
+                    : "bg-paper border border-hairline text-graphite hover:border-cobalt/40",
+                )}
+                aria-label={`Selecionar foto ${i + 1}`}
+              >
+                {i + 1}
+              </button>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => onChange(i, e.target.value)}
+                className={cn(
+                  "flex-1 h-8 px-2 rounded-md bg-paper border border-hairline text-[12px] font-mono",
+                  "focus:outline-none focus:border-cobalt",
+                )}
+              />
+            </li>
+          );
+        })}
+      </ul>
+      <p className="text-[10px] text-graphite italic leading-snug">
+        Mudar a data base acima reordena tudo automaticamente.
+      </p>
     </div>
   );
 }
