@@ -2,19 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, Users } from "lucide-react";
+import { ClipboardList, Users, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ITEMS = [
   { href: "/plantoes", label: "Plantões", icon: ClipboardList },
   { href: "/pacientes", label: "Pacientes", icon: Users },
+  { href: "/manual", label: "Manual", icon: BookOpen },
 ];
 
 export function BottomNav() {
   const pathname = usePathname();
   return (
     <nav className="sticky bottom-0 z-40 w-full bg-paper border-t border-hairline safe-bottom">
-      <div className="grid grid-cols-2">
+      <div className="grid grid-cols-3">
         {ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href);
           return (
