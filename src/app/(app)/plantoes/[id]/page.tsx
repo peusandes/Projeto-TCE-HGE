@@ -32,6 +32,9 @@ export default async function PlantaoDetailPage({
   const tcleP = mapa.filter((m) => m.tcle_status === "PENDENTE").length;
   const adm = mapa.filter((m) => m.situacao === "ADM").length;
   const altas = mapa.filter((m) => m.situacao === "ALTA").length;
+  const pendentesAlta = mapa.filter(
+    (m) => m.verificacao_alta === "PENDENTE_HGE",
+  ).length;
 
   return (
     <div className="container max-w-2xl py-3 space-y-2">
@@ -49,7 +52,10 @@ export default async function PlantaoDetailPage({
               <Lock className="h-3 w-3" /> finalizado
             </span>
           ) : (
-            <FinalizarPlantaoButton plantaoId={plantao.id} />
+            <FinalizarPlantaoButton
+              plantaoId={plantao.id}
+              pendentesAltaCount={pendentesAlta}
+            />
           )}
           {me?.is_admin && (
             <ExcluirPlantaoButton plantaoId={plantao.id} dataLabel={dataLabel} />

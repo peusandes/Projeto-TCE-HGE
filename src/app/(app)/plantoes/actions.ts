@@ -65,15 +65,80 @@ export async function criarPlantao(input: {
   redirect(`/plantoes/${novoPlantao.id}`);
 }
 
-export async function finalizarPlantao(id: string) {
+/**
+ * Finaliza o plantão e, pra cada paciente em "Possível alta" (PENDENTE_HGE),
+ * verifica histórico de pendência. Se já houve OUTRO plantão finalizado com
+ * o mesmo paciente em PENDENTE_HGE, o sistema entende que o paciente sumiu
+ * do hospital e auto-exclui do mapa (situacao=EXCLUSAO + motivo).
+ *
+ * Retorna info pro client sobre quantos foram auto-excluídos.
+ */
+export async function finalizarPlantao(
+  id: string,
+): Promise<{ excluidos: { id: string; nome: string }[] }> {
   const supabase = createClient();
+
+  // 1. Marca plantão como finalizado.
   const { error } = await supabase
     .from("plantoes")
     .update({ finalizado: true, finalizado_em: new Date().toISOString() })
     .eq("id", id);
   if (error) throw error;
+
+  // 2. Pega pacientes em PENDENTE_HGE neste plantão.
+  const { data: pendentes } = await supabase
+    .from("mapa_entries")
+    .select("paciente_id, pacientes(id, nome)")
+    .eq("plantao_id", id)
+    .eq("verificacao_alta", "PENDENTE_HGE");
+
+  const excluidos: { id: string; nome: string }[] = [];
+
+  for (const row of pendentes ?? []) {
+    const pacienteId = row.paciente_id as string;
+    const pacienteInfo = (row.pacientes as { id: string; nome: string } | null) ?? null;
+    if (!pacienteInfo) continue;
+
+    // 3. Conta plantões finalizados ANTERIORES (não este) onde o paciente
+    //    também estava como PENDENTE_HGE. Inclui SOMENTE plantões finalizados.
+    const { data: historico } = await supabase
+      .from("mapa_entries")
+      .select("plantao_id, plantoes!inner(finalizado)")
+      .eq("paciente_id", pacienteId)
+      .eq("verificacao_alta", "PENDENTE_HGE")
+      .neq("plantao_id", id)
+      .eq("plantoes.finalizado", true);
+
+    const plantoesAnterioresPendentes = (historico ?? []).length;
+
+    // Já houve pelo menos 1 plantão finalizado anterior com pendência →
+    // este é o segundo. Auto-exclui.
+    if (plantoesAnterioresPendentes >= 1) {
+      await supabase
+        .from("pacientes")
+        .update({
+          situacao: "EXCLUSAO",
+          verificacao_alta: null,
+          motivo_exclusao:
+            "Paciente sumiu — 2 plantões finalizados sem confirmação no HGE (auto-exclusão)",
+        })
+        .eq("id", pacienteId);
+
+      // Espelha no mapa_entries deste plantão pro card refletir.
+      await supabase
+        .from("mapa_entries")
+        .update({ situacao: "EXCLUSAO", verificacao_alta: null })
+        .eq("paciente_id", pacienteId)
+        .eq("plantao_id", id);
+
+      excluidos.push(pacienteInfo);
+    }
+  }
+
   revalidatePath("/plantoes");
+  revalidatePath("/pacientes");
   revalidatePath(`/plantoes/${id}`);
+  return { excluidos };
 }
 
 /**
