@@ -31,6 +31,9 @@ export type UpsertColetaRedcapPayload = {
   paciente_id: string;
   plantao_id: string;
   instrument: InstrumentId;
+  /** Instância da coleta. 1 pra instrumentos single-shot (admissão, alta…).
+   *  >1 pra instrumentos multi-instance (seguimento: dia 1, 2, 3…). */
+  seq: number;
   data: RedcapFormData;
   status: FormStatus;
 };
@@ -78,11 +81,12 @@ const upsertColetaRedcap: Executor<UpsertColetaRedcapPayload> = async (input) =>
         paciente_id: input.paciente_id,
         plantao_id: input.plantao_id,
         tipo: input.instrument,
+        seq: input.seq,
         dados: input.data,
         status: input.status,
         coletado_por: user?.id ?? null,
       },
-      { onConflict: "paciente_id,tipo" },
+      { onConflict: "paciente_id,tipo,seq" },
     );
   if (error) throw new Error(error.message);
 };

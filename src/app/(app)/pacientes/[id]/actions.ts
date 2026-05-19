@@ -102,6 +102,48 @@ export async function revalidarPacienteRoutes(plantaoId: string, pacienteId: str
   revalidatePath(`/pacientes/${pacienteId}`);
 }
 
+/**
+ * Cria uma nova instância vazia de coleta REDCap para o paciente. Usado pra
+ * instrumentos multi-instance (seguimento: dia 1, dia 2, dia 3…).
+ * Retorna o novo seq atribuído.
+ */
+export async function criarNovaColetaSeq(input: {
+  paciente_id: string;
+  plantao_id: string;
+  instrument: InstrumentId;
+}): Promise<{ seq: number }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Pega o maior seq atual e adiciona 1.
+  const { data: existentes, error: selErr } = await supabase
+    .from("coletas_redcap")
+    .select("seq")
+    .eq("paciente_id", input.paciente_id)
+    .eq("tipo", input.instrument)
+    .order("seq", { ascending: false })
+    .limit(1);
+  if (selErr) throw new Error(selErr.message);
+
+  const proximoSeq = (existentes?.[0]?.seq ?? 0) + 1;
+
+  const { error } = await supabase.from("coletas_redcap").insert({
+    paciente_id: input.paciente_id,
+    plantao_id: input.plantao_id,
+    tipo: input.instrument,
+    seq: proximoSeq,
+    dados: {},
+    status: "INCOMPLETE",
+    coletado_por: user?.id ?? null,
+  });
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/pacientes/${input.paciente_id}`);
+  return { seq: proximoSeq };
+}
+
 export async function deletarPaciente(id: string) {
   const supabase = createClient();
   const { data, error } = await supabase

@@ -19,6 +19,8 @@ import { debounce, cn } from "@/lib/utils";
 type Props = {
   instrument: InstrumentDef;
   paciente: { id: string; nome: string; plantao_id: string };
+  /** Instância dessa coleta. 1 pra single-shot, >1 pra seguimento dia N. */
+  seq?: number;
   initialData: FormData;
   initialStatus: FormStatus;
   otherForms: Record<string, FormData>;
@@ -33,6 +35,7 @@ const STATUS_LABEL: Record<FormStatus, string> = {
 export function RedcapForm({
   instrument,
   paciente,
+  seq = 1,
   initialData,
   initialStatus,
   otherForms,
@@ -80,6 +83,7 @@ export function RedcapForm({
             paciente_id: paciente.id,
             plantao_id: paciente.plantao_id,
             instrument: instrument.id,
+            seq,
             data: payload.data,
             status: payload.status,
           };
