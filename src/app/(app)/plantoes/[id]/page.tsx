@@ -4,8 +4,10 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ChevronLeft, Lock } from "lucide-react";
 import { getPlantao, getMapaDoPlantao } from "@/lib/data/plantoes";
+import { getCurrentPesquisador } from "@/lib/data/pesquisadores";
 import { MapaPlantao } from "@/components/plantao/MapaPlantao";
 import { FinalizarPlantaoButton } from "@/components/plantao/FinalizarPlantaoButton";
+import { ExcluirPlantaoButton } from "@/components/plantao/ExcluirPlantaoButton";
 
 export const dynamic = "force-dynamic";
 
@@ -16,12 +18,16 @@ export default async function PlantaoDetailPage({
 }) {
   const plantao = await getPlantao(params.id);
   if (!plantao) notFound();
-  const mapa = await getMapaDoPlantao(plantao.id);
+  const [mapa, me] = await Promise.all([
+    getMapaDoPlantao(plantao.id),
+    getCurrentPesquisador(),
+  ]);
 
   const date = new Date(plantao.data + "T12:00:00");
   const dia = format(date, "dd");
   const diaSemana = format(date, "EEEE", { locale: ptBR });
   const mesAno = format(date, "MMMM 'de' yyyy", { locale: ptBR });
+  const dataLabel = format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 
   const tcleP = mapa.filter((m) => m.tcle_status === "PENDENTE").length;
   const adm = mapa.filter((m) => m.situacao === "ADM").length;
@@ -37,13 +43,18 @@ export default async function PlantaoDetailPage({
           <ChevronLeft className="h-4 w-4" strokeWidth={1.8} />
           Plantões
         </Link>
-        {plantao.finalizado ? (
-          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-editorial text-ash">
-            <Lock className="h-3 w-3" /> finalizado
-          </span>
-        ) : (
-          <FinalizarPlantaoButton plantaoId={plantao.id} />
-        )}
+        <div className="flex items-center gap-1">
+          {plantao.finalizado ? (
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-editorial text-ash">
+              <Lock className="h-3 w-3" /> finalizado
+            </span>
+          ) : (
+            <FinalizarPlantaoButton plantaoId={plantao.id} />
+          )}
+          {me?.is_admin && (
+            <ExcluirPlantaoButton plantaoId={plantao.id} dataLabel={dataLabel} />
+          )}
+        </div>
       </div>
 
       <section className="pt-3">
