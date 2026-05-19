@@ -8,6 +8,8 @@
     "start": "next start -p 3030",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "seed:admin": "node scripts/seed-admin.mjs"
   },
   "dependencies": {
@@ -58,7 +60,8 @@
     "postcss": "^8",
     "serwist": "^9.0.11",
     "tailwindcss": "^3.4.1",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^2.1.8"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
