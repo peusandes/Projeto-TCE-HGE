@@ -4,6 +4,7 @@ import { listAllPacientesAgrupados } from "@/lib/data/pacientes";
 import { PacienteListItem } from "@/components/paciente/PacienteListItem";
 import { PacientesSearch } from "@/components/paciente/PacientesSearch";
 import { BulkActionsToolbar } from "@/components/paciente/BulkActionsToolbar";
+import { LazyList } from "@/components/paciente/LazyList";
 import type { Paciente } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 
@@ -77,6 +78,7 @@ export default async function PacientesIndexPage() {
                 Confirme no prontuário digital se foi alta hospitalar ou só
                 saída do mapa Doutore.
               </p>
+              {/* Possível alta sempre tudo aberto — categoria pequena e crítica */}
               <ul className="space-y-2">
                 {pendentesAlta.map((p) => (
                   <li key={p.id}>
@@ -165,13 +167,7 @@ function SubGroup({ label, pacientes }: { label: string; pacientes: Paciente[] }
         </span>
         <div className="flex-1 h-px bg-hairline-soft" />
       </div>
-      <ul className="space-y-2">
-        {pacientes.map((p) => (
-          <li key={p.id}>
-            <PacienteListItem paciente={p} />
-          </li>
-        ))}
-      </ul>
+      <LazyList pacientes={pacientes} />
     </div>
   );
 }
@@ -206,13 +202,7 @@ function Section({
         <div className="flex-1 h-px bg-hairline" />
       </div>
       {subtitle && <p className="text-[11px] px-1 text-ash">{subtitle}</p>}
-      <ul className="space-y-2">
-        {pacientes.map((p) => (
-          <li key={p.id}>
-            <PacienteListItem paciente={p} />
-          </li>
-        ))}
-      </ul>
+      <LazyList pacientes={pacientes} />
     </section>
   );
 }

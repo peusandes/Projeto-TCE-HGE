@@ -4,8 +4,9 @@ import { BottomNav } from "@/components/shell/BottomNav";
 import { OfflineBanner } from "@/components/shell/OfflineBanner";
 import { IosInstallHint } from "@/components/shell/IosInstallHint";
 import { SyncProvider } from "@/components/sync/SyncProvider";
+import { OnboardingMount } from "@/components/onboarding/OnboardingMount";
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col">
       <SyncProvider />
@@ -15,6 +16,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <AppFooter />
       <BottomNav />
       <IosInstallHint />
+      <OnboardingMount />
     </div>
   );
 }

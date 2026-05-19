@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { CredentialCard } from "@/components/manual/CredentialCard";
 import { MapaCollapsible } from "@/components/manual/MapaCollapsible";
+import { TourRetrigger } from "@/components/onboarding/TourRetrigger";
+import { getCurrentPesquisador } from "@/lib/data/pesquisadores";
 
 export const metadata = { title: "Manual de coleta — LANC TCE" };
 // Não pode ser force-static: o layout (app) carrega o AppHeader que chama
@@ -40,7 +42,8 @@ const CRITERIOS_EXCLUSAO = [
   "Pacientes regulados de outro serviço",
 ];
 
-export default function ManualPage() {
+export default async function ManualPage() {
+  const me = await getCurrentPesquisador();
   return (
     <div className="container max-w-3xl py-5 space-y-8">
       {/* HERO */}
@@ -65,6 +68,13 @@ export default function ManualPage() {
           <ContactPill icon={<Phone className="h-3 w-3" />} label="Orientador" value="Dr. Davi Solla · (11) 94234-1989" href="tel:+5511942341989" />
           <ContactPill icon={<Mail className="h-3 w-3" />} label="E-mail" value="davisolla@hotmail.com" href="mailto:davisolla@hotmail.com" />
         </div>
+
+        {/* Tour replay */}
+        {me && (
+          <div className="pt-2">
+            <TourRetrigger nomePesquisador={me.nome ?? ""} />
+          </div>
+        )}
       </section>
 
       {/* TCLE DOWNLOADS */}

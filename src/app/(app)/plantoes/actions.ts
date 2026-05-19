@@ -96,7 +96,8 @@ export async function finalizarPlantao(
 
   for (const row of pendentes ?? []) {
     const pacienteId = row.paciente_id as string;
-    const pacienteInfo = (row.pacientes as { id: string; nome: string } | null) ?? null;
+    const pacienteInfo =
+      (row.pacientes as unknown as { id: string; nome: string } | null) ?? null;
     if (!pacienteInfo) continue;
 
     // 3. Conta plantões finalizados ANTERIORES (não este) onde o paciente

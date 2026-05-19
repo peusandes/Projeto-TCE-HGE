@@ -17,6 +17,7 @@ export type CurrentPesquisador = {
   is_admin: boolean;
   setup_complete: boolean;
   avatar_url: string | null;
+  onboarded_at: string | null;
 };
 
 export async function listPesquisadores(): Promise<PesquisadorRow[]> {
@@ -37,7 +38,7 @@ export async function getCurrentPesquisador(): Promise<CurrentPesquisador | null
   if (!user) return null;
   const { data } = await supabase
     .from("pesquisadores")
-    .select("id, nome, email, is_admin, setup_complete, avatar_url")
+    .select("id, nome, email, is_admin, setup_complete, avatar_url, onboarded_at")
     .eq("id", user.id)
     .maybeSingle();
   if (!data) return null;

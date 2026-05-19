@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { CheckCircle2, CircleDashed, AlertCircle } from "lucide-react";
+import { CheckCircle2, CircleDashed, AlertCircle, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { RedcapField } from "./RedcapField";
@@ -12,6 +12,7 @@ import type {
   FormStatus,
   InstrumentDef,
 } from "@/lib/redcap-schema/types";
+import { validateField } from "@/lib/redcap-schema/validations";
 import { performWithSync } from "@/lib/sync/perform";
 import type { UpsertColetaRedcapPayload } from "@/lib/sync/executors";
 import { debounce, cn, errMsg } from "@/lib/utils";
@@ -197,14 +198,26 @@ export function RedcapForm({
       <div className="space-y-5">
         {instrument.fields.map((f) => {
           if (f.showWhen && !f.showWhen({ ...ctx, data })) return null;
+          const fullCtx = { ...ctx, data };
+          const warning = validateField(instrument.id, f.name, fullCtx);
           return (
-            <RedcapField
-              key={f.name}
-              field={f}
-              value={data[f.name] ?? null}
-              onChange={(v) => update(f.name, v)}
-              ctx={{ ...ctx, data }}
-            />
+            <div key={f.name} className="space-y-1.5">
+              <RedcapField
+                field={f}
+                value={data[f.name] ?? null}
+                onChange={(v) => update(f.name, v)}
+                ctx={fullCtx}
+              />
+              {warning && (
+                <div className="flex items-start gap-1.5 rounded-md border border-saffron/30 bg-saffron/[0.08] px-2.5 py-1.5">
+                  <AlertTriangle
+                    className="h-3 w-3 mt-0.5 shrink-0 text-saffron"
+                    strokeWidth={2}
+                  />
+                  <p className="text-[11px] leading-snug text-saffron">{warning}</p>
+                </div>
+              )}
+            </div>
           );
         })}
       </div>

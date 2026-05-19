@@ -48,7 +48,7 @@ import { createClient } from "@/lib/supabase/client";
 import { buildStoragePath } from "@/lib/utils/storage-path";
 import { getCroppedBlob } from "@/lib/utils/crop-image";
 import { ImageEditor, type ImageEditState } from "./ImageEditor";
-import { cn } from "@/lib/utils";
+import { cn, errMsg } from "@/lib/utils";
 
 /* ─────────── Constantes ─────────── */
 
