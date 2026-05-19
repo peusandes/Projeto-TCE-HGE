@@ -5,6 +5,7 @@ import type {
   TipoAnexo,
   StatusColeta,
   TipoColeta,
+  VerificacaoAlta,
 } from "./enums";
 
 export type Pesquisador = {
@@ -37,6 +38,7 @@ export type Paciente = {
   descricao: string | null;
   comentarios: string | null;
   motivo_exclusao: string | null;
+  verificacao_alta: VerificacaoAlta | null;
   criado_em: string;
   atualizado_em: string;
 };
@@ -51,6 +53,7 @@ export type MapaEntry = {
   tcle_status: TcleStatus;
   descricao: string | null;
   comentarios: string | null;
+  verificacao_alta: VerificacaoAlta | null;
   ordem: number;
 };
 

@@ -11,6 +11,7 @@ import {
   type Setor,
   type Situacao,
   type TcleStatus,
+  type VerificacaoAlta,
 } from "@/lib/domain/enums";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +24,7 @@ type MapaItem = {
   tcle_status: TcleStatus;
   descricao: string | null;
   comentarios: string | null;
+  verificacao_alta: VerificacaoAlta | null;
   ordem: number;
   pacientes: { id: string; nome: string } | null;
 };
@@ -122,6 +124,7 @@ export function MapaPlantao({
                           tcle_status: item.tcle_status,
                           descricao: item.descricao,
                           comentarios: item.comentarios,
+                          verificacao_alta: item.verificacao_alta,
                         }}
                       />
                     </li>

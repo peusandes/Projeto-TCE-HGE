@@ -45,7 +45,7 @@ export async function getMapaDoPlantao(plantaoId: string) {
     .select(
       `
       id, plantao_id, paciente_id, setor, leito, situacao, tcle_status,
-      descricao, comentarios, ordem,
+      descricao, comentarios, verificacao_alta, ordem,
       pacientes ( id, nome, redcap_id, motivo_exclusao )
     `,
     )

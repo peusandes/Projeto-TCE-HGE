@@ -75,7 +75,10 @@ export function NovoPacienteDrawer({
     salvar();
   }
 
-  function salvar() {
+  function salvar(overrides?: {
+    situacao?: Situacao;
+    verificacao_alta?: "PENDENTE_HGE" | null;
+  }) {
     startTransition(async () => {
       try {
         await adicionarPaciente({
@@ -83,12 +86,17 @@ export function NovoPacienteDrawer({
           nome: nome.trim(),
           setor: setorAtual,
           leito: leito.trim() || null,
-          situacao,
+          situacao: overrides?.situacao ?? situacao,
           tcle_status: tcle,
           descricao: descricao.trim() || null,
           comentarios: comentarios.trim() || null,
+          verificacao_alta: overrides?.verificacao_alta ?? null,
         });
-        toast.success("Paciente adicionado");
+        toast.success(
+          overrides?.verificacao_alta
+            ? "Paciente adicionado — verificação pendente"
+            : "Paciente adicionado",
+        );
         onClose();
       } catch (err) {
         toast.error("Erro ao adicionar", { description: String(err) });
@@ -173,7 +181,12 @@ export function NovoPacienteDrawer({
             setConfirmAlta(false);
             salvar();
           }}
-          onCancel={() => setConfirmAlta(false)}
+          onCancel={() => {
+            // "Vou checar no HGE": cria como ADM com verificação pendente
+            // pra o pesquisador resolver depois pelo card amarelo.
+            setConfirmAlta(false);
+            salvar({ situacao: "ADM", verificacao_alta: "PENDENTE_HGE" });
+          }}
         />
       </DrawerContent>
     </Drawer>

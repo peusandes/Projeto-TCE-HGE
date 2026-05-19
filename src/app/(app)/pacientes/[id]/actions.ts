@@ -23,6 +23,7 @@ export async function atualizarPaciente(
       | "comentarios"
       | "motivo_exclusao"
       | "redcap_id"
+      | "verificacao_alta"
     >
   >,
 ) {
@@ -45,6 +46,7 @@ export async function atualizarPaciente(
       tcle_status: patch.tcle_status,
       descricao: patch.descricao,
       comentarios: patch.comentarios,
+      verificacao_alta: patch.verificacao_alta,
     })
     .eq("paciente_id", id)
     .eq("plantao_id", paciente.plantao_id);

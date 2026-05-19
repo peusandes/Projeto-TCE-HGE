@@ -52,6 +52,22 @@ export const SITUACAO_BADGE_CLASS: Record<Situacao, string> = {
   ALTA: "bg-purple-600 text-white hover:bg-purple-700",
 };
 
+/**
+ * Estado de verificação da alta. NULL = sem dúvida.
+ *  - PENDENTE_HGE: usuário marcou ALTA no app mas ainda precisa checar no
+ *    sistema do HGE (alta no Doutore pode ser só queda do mapa da
+ *    neurocirurgia, não alta hospitalar real). Card fica amarelo.
+ *  - FORA_DOUTORE: depois de checar, descobriu que paciente segue
+ *    internado — só sumiu do Doutore. Card mantém sinal laranja.
+ */
+export const VERIFICACAO_ALTA = ["PENDENTE_HGE", "FORA_DOUTORE"] as const;
+export type VerificacaoAlta = (typeof VERIFICACAO_ALTA)[number];
+
+export const VERIFICACAO_ALTA_LABEL: Record<VerificacaoAlta, string> = {
+  PENDENTE_HGE: "Verificar alta no HGE",
+  FORA_DOUTORE: "Fora do mapa Doutore",
+};
+
 export const TCLE_STATUS = ["PENDENTE", "ASSINADO", "RECUSADO", "NA"] as const;
 export type TcleStatus = (typeof TCLE_STATUS)[number];
 

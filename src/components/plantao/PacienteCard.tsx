@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { AlertTriangle, ChevronRight } from "lucide-react";
 import { SituacaoBadge, TcleBadge, SITUACAO_ACCENT } from "./PacienteBadges";
-import type { Situacao, TcleStatus } from "@/lib/domain/enums";
+import type { Situacao, TcleStatus, VerificacaoAlta } from "@/lib/domain/enums";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -13,6 +13,7 @@ type Props = {
     tcle_status: TcleStatus;
     descricao: string | null;
     comentarios: string | null;
+    verificacao_alta?: VerificacaoAlta | null;
   };
 };
 
@@ -29,6 +30,8 @@ export function PacienteCard({ paciente }: Props) {
   const { numeral, suffix } = extractLeitoNumber(paciente.leito);
   const isExcluded = paciente.situacao === "EXCLUSAO";
   const isAlta = paciente.situacao === "ALTA";
+  const isPendenteAlta = paciente.verificacao_alta === "PENDENTE_HGE";
+  const isForaDoutore = paciente.verificacao_alta === "FORA_DOUTORE";
   const accent = SITUACAO_ACCENT[paciente.situacao];
 
   return (
@@ -36,20 +39,37 @@ export function PacienteCard({ paciente }: Props) {
       <article
         className={cn(
           "relative rounded-xl border px-4 py-3.5 transition-colors",
-          isExcluded
-            ? "bg-vermillion/[0.07] border-vermillion/25"
-            : isAlta
-              ? "bg-paper-deep/50 border-hairline"
-              : "bg-paper-deep border-hairline hover:border-cobalt/50",
+          // Prioridade: pendente > excluído > alta > normal.
+          // Pendente tem o destaque mais forte: o usuário PRECISA resolver.
+          isPendenteAlta
+            ? "bg-saffron/[0.10] border-saffron/50 ring-1 ring-saffron/20"
+            : isExcluded
+              ? "bg-vermillion/[0.07] border-vermillion/25"
+              : isAlta
+                ? "bg-paper-deep/50 border-hairline"
+                : isForaDoutore
+                  ? "bg-paper-deep border-saffron/30 hover:border-saffron/60"
+                  : "bg-paper-deep border-hairline hover:border-cobalt/50",
         )}
       >
-        <div className={cn("absolute left-0 top-5 bottom-5 w-[2px] rounded-full", accent)} />
+        <div
+          className={cn(
+            "absolute left-0 top-5 bottom-5 w-[2px] rounded-full",
+            isPendenteAlta ? "bg-saffron" : isForaDoutore ? "bg-saffron/70" : accent,
+          )}
+        />
         <div className="flex items-start gap-4">
           <div className="text-center pt-0.5 shrink-0 w-11">
             <div
               className={cn(
                 "text-[26px] leading-none font-light tab-num tracking-tight",
-                isExcluded ? "text-vermillion/60" : isAlta ? "text-ash" : "text-ink",
+                isPendenteAlta
+                  ? "text-saffron"
+                  : isExcluded
+                    ? "text-vermillion/60"
+                    : isAlta
+                      ? "text-ash"
+                      : "text-ink",
               )}
             >
               {numeral}
@@ -80,7 +100,9 @@ export function PacienteCard({ paciente }: Props) {
               </p>
             )}
             <div className="flex items-center gap-1.5 flex-wrap mt-2.5">
-              <SituacaoBadge value={paciente.situacao} />
+              {isPendenteAlta && <VerificacaoBadge tipo="pendente" />}
+              {isForaDoutore && <VerificacaoBadge tipo="fora" />}
+              {!isPendenteAlta && <SituacaoBadge value={paciente.situacao} />}
               {paciente.situacao !== "EXCLUSAO" && <TcleBadge value={paciente.tcle_status} />}
             </div>
           </div>
@@ -88,5 +110,15 @@ export function PacienteCard({ paciente }: Props) {
         </div>
       </article>
     </Link>
+  );
+}
+
+function VerificacaoBadge({ tipo }: { tipo: "pendente" | "fora" }) {
+  const label = tipo === "pendente" ? "Verificar alta" : "Fora Doutore";
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-[3px] rounded-full text-[10px] uppercase tracking-[0.06em] font-medium leading-none border bg-saffron/20 border-saffron/40 text-saffron">
+      <AlertTriangle className="h-2.5 w-2.5" strokeWidth={2.4} />
+      {label}
+    </span>
   );
 }

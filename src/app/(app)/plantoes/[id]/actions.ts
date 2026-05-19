@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import type { Setor, Situacao, TcleStatus } from "@/lib/domain/enums";
+import type { Setor, Situacao, TcleStatus, VerificacaoAlta } from "@/lib/domain/enums";
 
 export type NovoPacienteAction = {
   plantao_id: string;
@@ -13,6 +13,7 @@ export type NovoPacienteAction = {
   tcle_status: TcleStatus;
   descricao?: string | null;
   comentarios?: string | null;
+  verificacao_alta?: VerificacaoAlta | null;
 };
 
 export async function adicionarPaciente(input: NovoPacienteAction) {
@@ -28,8 +29,9 @@ export async function adicionarPaciente(input: NovoPacienteAction) {
       tcle_status: input.tcle_status,
       descricao: input.descricao ?? null,
       comentarios: input.comentarios ?? null,
+      verificacao_alta: input.verificacao_alta ?? null,
     })
-    .select("id, setor, leito, situacao, tcle_status, descricao, comentarios")
+    .select("id, setor, leito, situacao, tcle_status, descricao, comentarios, verificacao_alta")
     .single();
   if (error || !paciente) throw error ?? new Error("Falha ao criar paciente");
 
@@ -51,6 +53,7 @@ export async function adicionarPaciente(input: NovoPacienteAction) {
     tcle_status: paciente.tcle_status,
     descricao: paciente.descricao,
     comentarios: paciente.comentarios,
+    verificacao_alta: paciente.verificacao_alta,
     ordem,
   });
   if (meErr) throw meErr;

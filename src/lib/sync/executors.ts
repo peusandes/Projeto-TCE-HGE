@@ -22,6 +22,7 @@ export type UpdatePacientePayload = {
       | "comentarios"
       | "motivo_exclusao"
       | "redcap_id"
+      | "verificacao_alta"
     >
   >;
 };
@@ -59,6 +60,7 @@ const updatePaciente: Executor<UpdatePacientePayload> = async ({
       tcle_status: patch.tcle_status,
       descricao: patch.descricao,
       comentarios: patch.comentarios,
+      verificacao_alta: patch.verificacao_alta,
     })
     .eq("paciente_id", id)
     .eq("plantao_id", plantao_id);

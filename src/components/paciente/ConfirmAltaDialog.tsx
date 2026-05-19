@@ -63,14 +63,21 @@ export function ConfirmAltaDialog({ open, pacienteNome, onConfirm, onCancel }: P
           </p>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" onClick={onCancel} className="sm:flex-1">
+        <DialogFooter className="gap-2 sm:gap-2 flex-col-reverse sm:flex-row">
+          <Button
+            variant="outline"
+            onClick={onCancel}
+            className="sm:flex-1 border-saffron/40 text-saffron hover:bg-saffron/10 hover:text-saffron"
+          >
             Vou checar no HGE
           </Button>
           <Button onClick={onConfirm} className="sm:flex-1">
             Já confirmei — é alta
           </Button>
         </DialogFooter>
+        <p className="text-[11px] text-ash text-center leading-snug">
+          Se escolher <em>“vou checar”</em>, o paciente fica em <span className="text-saffron font-semibold">amarelo</span> esperando sua confirmação.
+        </p>
       </DialogContent>
     </Dialog>
   );

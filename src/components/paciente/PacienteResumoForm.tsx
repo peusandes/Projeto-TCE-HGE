@@ -25,6 +25,7 @@ import {
   type Setor,
   type Situacao,
   type TcleStatus,
+  type VerificacaoAlta,
 } from "@/lib/domain/enums";
 import { deletarPaciente } from "@/app/(app)/pacientes/[id]/actions";
 import { performWithSync } from "@/lib/sync/perform";
@@ -32,6 +33,7 @@ import type { UpdatePacientePayload } from "@/lib/sync/executors";
 import type { Paciente } from "@/lib/domain/types";
 import { debounce, cn } from "@/lib/utils";
 import { ConfirmAltaDialog } from "./ConfirmAltaDialog";
+import { VerificacaoAltaBanner, ForaDoutoreBanner } from "./VerificacaoAltaBanner";
 
 const FIELD_LABEL = "text-[10px] uppercase tracking-editorial text-ash";
 const FIELD_INPUT =
@@ -51,6 +53,9 @@ export function PacienteResumoForm({ paciente }: { paciente: Paciente }) {
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmAlta, setConfirmAlta] = useState(false);
+  const [verificacao, setVerificacao] = useState<VerificacaoAlta | null>(
+    paciente.verificacao_alta,
+  );
   const [, startTransition] = useTransition();
   const firstRender = useRef(true);
 
@@ -89,9 +94,10 @@ export function PacienteResumoForm({ paciente }: { paciente: Paciente }) {
       comentarios: comentarios || null,
       motivo_exclusao: motivo || null,
       redcap_id: redcapId || null,
+      verificacao_alta: verificacao,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nome, leito, setor, situacao, tcle, descricao, comentarios, motivo, redcapId]);
+  }, [nome, leito, setor, situacao, tcle, descricao, comentarios, motivo, redcapId, verificacao]);
 
   async function handleDelete() {
     if (!confirm(`Excluir paciente "${paciente.nome}"? Esta ação não pode ser desfeita.`)) return;
@@ -106,6 +112,28 @@ export function PacienteResumoForm({ paciente }: { paciente: Paciente }) {
 
   return (
     <div className="space-y-4">
+      {verificacao === "PENDENTE_HGE" && (
+        <VerificacaoAltaBanner
+          setorAtual={setor}
+          leitoAtual={leito || null}
+          onConfirmAlta={() => {
+            setVerificacao(null);
+            setSituacao("ALTA");
+          }}
+          onNaoFoiAlta={({ setor: s, leito: l }) => {
+            // Volta pra ADM caso situacao já tivesse virado ALTA antes
+            if (situacao === "ALTA") setSituacao("ADM");
+            setSetor(s);
+            setLeito(l ?? "");
+            setVerificacao("FORA_DOUTORE");
+          }}
+        />
+      )}
+
+      {verificacao === "FORA_DOUTORE" && (
+        <ForaDoutoreBanner onLimpar={() => setVerificacao(null)} />
+      )}
+
       <div className="flex items-center justify-end gap-2 text-[10px] tracking-wide text-ash font-mono">
         <span
           className={cn(
@@ -240,10 +268,17 @@ export function PacienteResumoForm({ paciente }: { paciente: Paciente }) {
         open={confirmAlta}
         pacienteNome={nome}
         onConfirm={() => {
+          // Confirmou: vira ALTA, limpa qualquer pendência.
           setSituacao("ALTA");
+          setVerificacao(null);
           setConfirmAlta(false);
         }}
-        onCancel={() => setConfirmAlta(false)}
+        onCancel={() => {
+          // "Vou checar no HGE": NÃO altera situação, marca card como amarelo
+          // até o pesquisador resolver pelo banner de verificação.
+          setVerificacao("PENDENTE_HGE");
+          setConfirmAlta(false);
+        }}
       />
     </div>
   );
