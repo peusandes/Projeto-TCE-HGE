@@ -27,7 +27,7 @@ import {
   type TcleStatus,
   type VerificacaoAlta,
 } from "@/lib/domain/enums";
-import { deletarPaciente } from "@/app/(app)/pacientes/[id]/actions";
+import { deletarPaciente, revalidarPacienteRoutes } from "@/app/(app)/pacientes/[id]/actions";
 import { performWithSync } from "@/lib/sync/perform";
 import type { UpdatePacientePayload } from "@/lib/sync/executors";
 import type { Paciente } from "@/lib/domain/types";
@@ -64,12 +64,20 @@ export function PacienteResumoForm({ paciente }: { paciente: Paciente }) {
       setSaving(true);
       startTransition(async () => {
         try {
-          await performWithSync<UpdatePacientePayload>(
+          const res = await performWithSync<UpdatePacientePayload>(
             "update_paciente",
             { id: paciente.id, plantao_id: paciente.plantao_id, patch },
             { silent: true },
           );
           setSavedAt(new Date());
+          // Online + sync OK: invalida o cache RSC das telas pai e do detalhe
+          // pra que ao voltar pra /pacientes ou /plantoes a situação já esteja
+          // atualizada — sem precisar de refresh manual.
+          if (res === "synced") {
+            revalidarPacienteRoutes(paciente.plantao_id, paciente.id).catch(() => {
+              // fire-and-forget; se falhar, próxima nav cuida
+            });
+          }
         } catch (err) {
           toast.error("Erro ao salvar", { description: String(err) });
         } finally {

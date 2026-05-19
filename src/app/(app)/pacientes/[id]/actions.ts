@@ -89,6 +89,19 @@ export async function salvarColetaRedcap(input: {
   revalidatePath(`/pacientes/${input.paciente_id}`);
 }
 
+/**
+ * Invalidação leve do cache RSC depois que o sync escreve no Supabase
+ * direto (sem passar por server action). Chama no client após cada save
+ * pra que a navegação de volta pra /pacientes ou /plantoes/[id] mostre
+ * o estado novo sem refresh manual.
+ */
+export async function revalidarPacienteRoutes(plantaoId: string, pacienteId: string) {
+  revalidatePath("/pacientes");
+  revalidatePath("/plantoes");
+  revalidatePath(`/plantoes/${plantaoId}`);
+  revalidatePath(`/pacientes/${pacienteId}`);
+}
+
 export async function deletarPaciente(id: string) {
   const supabase = createClient();
   const { data, error } = await supabase
