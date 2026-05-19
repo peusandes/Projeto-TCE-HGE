@@ -19,8 +19,6 @@ export const metadata = { title: "Dashboard — LANC TCE" };
 export default async function AdminDashboardPage() {
   const s = await getDashboardStats();
   const internados = s.porSituacao.ADM + s.porSituacao.SEG;
-  const pct = (n: number, total: number) =>
-    total === 0 ? 0 : Math.round((n / total) * 100);
 
   return (
     <div className="container max-w-3xl py-5 space-y-6">
@@ -158,7 +156,7 @@ export default async function AdminDashboardPage() {
         </div>
         <p className="text-[11px] text-graphite mt-1.5 leading-relaxed">
           Pacientes com trauma há 30+ dias sem GOS-E preenchido viram pendência.
-          Pesquisador resolve marcando "Concluído" ou registrando tentativa.
+          Pesquisador resolve marcando &ldquo;Concluído&rdquo; ou registrando tentativa.
         </p>
       </section>
 

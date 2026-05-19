@@ -27,7 +27,8 @@ jobs:
 
       - name: Lint
         run: pnpm lint
-        continue-on-error: true # warnings não bloqueiam (build da Vercel já valida)
+        # Vercel falha em erro de lint no next build — replicamos aqui pra
+        # pegar antes do deploy.
 
       - name: Type-check
         run: pnpm type-check
