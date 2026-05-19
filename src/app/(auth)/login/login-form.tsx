@@ -58,6 +58,23 @@ export function LoginForm() {
 
   return (
     <div className="rounded-2xl border border-hairline bg-paper p-6 space-y-4">
+      {search.get("error") && (
+        <div className="rounded-md border border-vermillion/30 bg-vermillion/5 px-3 py-2.5 text-[12px] leading-snug text-vermillion">
+          <p className="font-medium">Não foi possível processar o link.</p>
+          <p className="mt-0.5 text-[11px] opacity-80">
+            {search.get("detail") || search.get("error")}
+          </p>
+          <p className="mt-1.5 text-[11px] opacity-80">
+            Pede pro admin (Pedro) reenviar o convite — o link anterior
+            pode ter expirado.
+          </p>
+        </div>
+      )}
+      {search.get("msg") === "reset_expirado" && (
+        <div className="rounded-md border border-saffron/30 bg-saffron/5 px-3 py-2.5 text-[12px] leading-snug text-saffron">
+          Link de redefinição expirou. Solicite um novo.
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="email" className="text-[10px] uppercase tracking-editorial text-ash">
