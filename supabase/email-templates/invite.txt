@@ -1,0 +1,44 @@
+LANC · COLETA TCE — Convite
+==============================
+
+Olá,
+
+A Liga Academica de Neurocirurgia da Bahia (LANC) está te convidando pra
+usar o sistema de coleta de dados do projeto Traumatismo Cranioencefalico
+(TCE) do Hospital Geral do Estado da Bahia (HGE).
+
+O sistema substitui as planilhas manuais de plantão e alimenta diretamente
+o REDCap do projeto. Com ele, voce vai conseguir registrar pacientes,
+anexar fotos de prontuarios e exames, preencher os instrumentos do
+protocolo TCE 3.0 e acompanhar a evolução clinica — tudo pelo celular,
+durante o proprio plantão.
+
+ACEITAR CONVITE
+---------------
+
+Clique no link abaixo para criar sua conta:
+
+{{ .ConfirmationURL }}
+
+O QUE VAI ACONTECER
+-------------------
+
+1. Voce clica no link acima e é direcionado pro sistema.
+2. Preenche seu nome completo e cria uma senha (minimo 8 caracteres).
+3. Confirma a senha e clica em "Concluir cadastro".
+4. Pronto — voce entra no app, ve os plantões em andamento e ja pode
+   mapear pacientes e preencher coletas.
+
+IMPORTANTE
+----------
+
+> Link valido por 24h. Se expirar, peca pra Pedro Sandes Pereira
+> reenviar o convite pelo painel admin do sistema.
+
+Se voce nao esperava receber este convite, pode ignorar esta
+mensagem — nada sera criado sem voce aceitar.
+
+---
+Duvidas? Fale com Pedro Sandes Pereira.
+Liga Academica de Neurocirurgia da Bahia
+Enviado pra {{ .Email }}

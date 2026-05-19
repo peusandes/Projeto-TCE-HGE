@@ -19,7 +19,10 @@ export function InvitarForm() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!email.trim()) return;
+    if (!email.trim()) {
+      toast.warning("Digite um email pra convidar.");
+      return;
+    }
     startTransition(async () => {
       try {
         const result = await convidarPesquisador({
@@ -77,7 +80,7 @@ export function InvitarForm() {
         />
       </div>
 
-      <Button type="submit" size="lg" className="w-full" disabled={pending || !email}>
+      <Button type="submit" size="lg" className="w-full" disabled={pending}>
         <UserPlus className="h-4 w-4 mr-2" strokeWidth={1.8} />
         {pending ? "Enviando..." : "Enviar convite"}
       </Button>

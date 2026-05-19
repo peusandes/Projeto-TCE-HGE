@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getSiteUrl } from "@/lib/site-url";
+
+// URL pública do app em produção. O link de convite SEMPRE aponta pra cá,
+// independente de onde o admin disparou o invite (local ou prod), pra que
+// o pesquisador convidado consiga clicar de qualquer lugar.
+const PRODUCTION_URL = "https://projetotce.com";
+const INVITE_REDIRECT = `${PRODUCTION_URL}/auth/callback?next=/auth/setup-account`;
 
 async function requireAdmin() {
   const supabase = createClient();
@@ -29,10 +34,9 @@ export async function convidarPesquisador(input: { email: string; nome?: string 
   }
 
   const admin = createAdminClient();
-  const siteUrl = getSiteUrl();
 
   const { error } = await admin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${siteUrl}/auth/callback?next=/auth/setup-account`,
+    redirectTo: INVITE_REDIRECT,
     data: input.nome ? { nome: input.nome } : undefined,
   });
   if (error) {
@@ -75,10 +79,8 @@ export async function removerPesquisador(pesquisadorId: string) {
 export async function reenviarConvite(email: string) {
   await requireAdmin();
   const admin = createAdminClient();
-  const siteUrl = getSiteUrl();
-  // Re-invitar via mesmo método: Supabase regenera o link e reenvia
   const { error } = await admin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${siteUrl}/auth/callback?next=/auth/setup-account`,
+    redirectTo: INVITE_REDIRECT,
   });
   if (error) throw new Error(error.message);
   revalidatePath("/admin/pesquisadores");

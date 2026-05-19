@@ -21,14 +21,23 @@ export function PasswordChangeForm() {
   const [pending, startTransition] = useTransition();
 
   const novaTooShort = nova.length > 0 && nova.length < 8;
-  const novaOk = nova.length >= 8;
   const match = confirmar.length > 0 && nova === confirmar;
   const mismatch = confirmar.length > 0 && nova !== confirmar;
-  const podeSalvar = atual.length > 0 && novaOk && match && !pending;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!podeSalvar) return;
+    if (!atual) {
+      toast.warning("Informe a senha atual.");
+      return;
+    }
+    if (nova.length < 8) {
+      toast.warning("Nova senha precisa ter pelo menos 8 caracteres.");
+      return;
+    }
+    if (nova !== confirmar) {
+      toast.error("As senhas não conferem.");
+      return;
+    }
     startTransition(async () => {
       try {
         await alterarSenha({ senha_atual: atual, nova_senha: nova });
@@ -109,7 +118,7 @@ export function PasswordChangeForm() {
         )}
       </div>
 
-      <Button type="submit" disabled={!podeSalvar} className="w-full" size="lg">
+      <Button type="submit" disabled={pending} className="w-full" size="lg">
         {pending ? "Alterando..." : "Alterar senha"}
       </Button>
     </form>

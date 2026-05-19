@@ -3,20 +3,23 @@
 import { useEffect, useState } from "react";
 
 /**
- * Reage ao evento online/offline do browser. Em SSR retorna `true` (otimista).
+ * Status de conexão. Começa otimista (true) porque, se a página
+ * carregou, tivemos rede em algum momento. `navigator.onLine` na
+ * inicialização é notoriamente bugado em alguns browsers (retorna
+ * false mesmo online); só confiamos no evento offline/online
+ * que o browser dispara quando a conexão muda de verdade.
  */
 export function useOnlineStatus(): boolean {
-  const [online, setOnline] = useState<boolean>(
-    typeof navigator === "undefined" ? true : navigator.onLine,
-  );
+  const [online, setOnline] = useState<boolean>(true);
 
   useEffect(() => {
-    function up() {
-      setOnline(true);
-    }
-    function down() {
+    // Se o browser já estiver reportando offline ao montar, respeita
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
       setOnline(false);
     }
+
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
     window.addEventListener("online", up);
     window.addEventListener("offline", down);
     return () => {
