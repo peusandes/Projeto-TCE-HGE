@@ -31,6 +31,7 @@ import { performWithSync } from "@/lib/sync/perform";
 import type { UpdatePacientePayload } from "@/lib/sync/executors";
 import type { Paciente } from "@/lib/domain/types";
 import { debounce, cn } from "@/lib/utils";
+import { ConfirmAltaDialog } from "./ConfirmAltaDialog";
 
 const FIELD_LABEL = "text-[10px] uppercase tracking-editorial text-ash";
 const FIELD_INPUT =
@@ -49,6 +50,7 @@ export function PacienteResumoForm({ paciente }: { paciente: Paciente }) {
   const [redcapId, setRedcapId] = useState(paciente.redcap_id ?? "");
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirmAlta, setConfirmAlta] = useState(false);
   const [, startTransition] = useTransition();
   const firstRender = useRef(true);
 
@@ -148,7 +150,18 @@ export function PacienteResumoForm({ paciente }: { paciente: Paciente }) {
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-2">
           <Label className={FIELD_LABEL}>Situação</Label>
-          <Select value={situacao} onValueChange={(v) => setSituacao(v as Situacao)}>
+          <Select
+            value={situacao}
+            onValueChange={(v) => {
+              const next = v as Situacao;
+              // Pop-up quando alterar PARA alta (mas não bloqueia voltar pra outro estado).
+              if (next === "ALTA" && situacao !== "ALTA") {
+                setConfirmAlta(true);
+                return;
+              }
+              setSituacao(next);
+            }}
+          >
             <SelectTrigger className={FIELD_INPUT}>
               <SelectValue />
             </SelectTrigger>
@@ -222,6 +235,16 @@ export function PacienteResumoForm({ paciente }: { paciente: Paciente }) {
           <Trash2 className="h-4 w-4 mr-1.5" /> Excluir paciente
         </Button>
       </div>
+
+      <ConfirmAltaDialog
+        open={confirmAlta}
+        pacienteNome={nome}
+        onConfirm={() => {
+          setSituacao("ALTA");
+          setConfirmAlta(false);
+        }}
+        onCancel={() => setConfirmAlta(false)}
+      />
     </div>
   );
 }

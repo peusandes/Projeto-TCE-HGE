@@ -26,6 +26,7 @@ import {
   type TcleStatus,
 } from "@/lib/domain/enums";
 import { adicionarPaciente } from "@/app/(app)/plantoes/[id]/actions";
+import { ConfirmAltaDialog } from "@/components/paciente/ConfirmAltaDialog";
 
 export function NovoPacienteDrawer({
   plantaoId,
@@ -46,6 +47,7 @@ export function NovoPacienteDrawer({
   const [descricao, setDescricao] = useState("");
   const [comentarios, setComentarios] = useState("");
   const [pending, startTransition] = useTransition();
+  const [confirmAlta, setConfirmAlta] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -65,6 +67,15 @@ export function NovoPacienteDrawer({
       toast.warning("Nome do paciente é obrigatório");
       return;
     }
+    // Intercepta — pede confirmação no HGE antes de criar como ALTA.
+    if (situacao === "ALTA") {
+      setConfirmAlta(true);
+      return;
+    }
+    salvar();
+  }
+
+  function salvar() {
     startTransition(async () => {
       try {
         await adicionarPaciente({
@@ -154,6 +165,16 @@ export function NovoPacienteDrawer({
             <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
           </DrawerFooter>
         </form>
+
+        <ConfirmAltaDialog
+          open={confirmAlta}
+          pacienteNome={nome.trim() || undefined}
+          onConfirm={() => {
+            setConfirmAlta(false);
+            salvar();
+          }}
+          onCancel={() => setConfirmAlta(false)}
+        />
       </DrawerContent>
     </Drawer>
   );
