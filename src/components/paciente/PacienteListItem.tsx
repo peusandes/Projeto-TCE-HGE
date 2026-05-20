@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { AlertTriangle, ChevronRight } from "lucide-react";
 import { SituacaoBadge, TcleBadge, SITUACAO_ACCENT } from "@/components/plantao/PacienteBadges";
+import { ResponsavelAvatar } from "@/components/plantao/ResponsavelAvatar";
 import { SETOR_SHORT } from "@/lib/domain/enums";
-import type { Paciente } from "@/lib/domain/types";
+import type { PacienteComResponsavel } from "@/lib/data/pacientes";
 import { cn } from "@/lib/utils";
 
-export function PacienteListItem({ paciente }: { paciente: Paciente }) {
+export function PacienteListItem({ paciente }: { paciente: PacienteComResponsavel }) {
   const isExcluded = paciente.situacao === "EXCLUSAO";
   const isAlta = paciente.situacao === "ALTA";
   const isPendenteAlta = paciente.verificacao_alta === "PENDENTE_HGE";
@@ -77,6 +78,14 @@ export function PacienteListItem({ paciente }: { paciente: Paciente }) {
               {paciente.situacao !== "EXCLUSAO" && <TcleBadge value={paciente.tcle_status} />}
             </div>
           </div>
+          {paciente.responsavel_atual && (
+            <div className="shrink-0" title={`Responsável: ${paciente.responsavel_atual.nome}`}>
+              <ResponsavelAvatar
+                responsavel={paciente.responsavel_atual}
+                size="sm"
+              />
+            </div>
+          )}
           <ChevronRight
             className={cn("h-4 w-4 shrink-0", isExcluded ? "text-vermillion/50" : "text-ash")}
           />

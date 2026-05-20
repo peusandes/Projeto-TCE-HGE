@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { AlertTriangle, ChevronRight } from "lucide-react";
 import { SituacaoBadge, TcleBadge, SITUACAO_ACCENT } from "./PacienteBadges";
+import { ResponsavelControl } from "./ResponsavelControl";
+import type { ResponsavelInfo } from "./ResponsavelAvatar";
 import type { Situacao, TcleStatus, VerificacaoAlta } from "@/lib/domain/enums";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +17,14 @@ type Props = {
     comentarios: string | null;
     verificacao_alta?: VerificacaoAlta | null;
   };
+  /** Reserva opcional — só mostra quando tem mapa_entry_id (mapa do plantão) */
+  reserva?: {
+    mapaEntryId: string;
+    responsavel: ResponsavelInfo | null;
+    currentUserId: string;
+    isAdmin: boolean;
+    readOnly: boolean;
+  };
 };
 
 function extractLeitoNumber(raw: string | null): { numeral: string; suffix: string } {
@@ -26,7 +36,7 @@ function extractLeitoNumber(raw: string | null): { numeral: string; suffix: stri
   return { numeral: num, suffix };
 }
 
-export function PacienteCard({ paciente }: Props) {
+export function PacienteCard({ paciente, reserva }: Props) {
   const { numeral, suffix } = extractLeitoNumber(paciente.leito);
   const isExcluded = paciente.situacao === "EXCLUSAO";
   const isAlta = paciente.situacao === "ALTA";
@@ -105,6 +115,18 @@ export function PacienteCard({ paciente }: Props) {
               {!isPendenteAlta && <SituacaoBadge value={paciente.situacao} />}
               {paciente.situacao !== "EXCLUSAO" && <TcleBadge value={paciente.tcle_status} />}
             </div>
+            {reserva && paciente.situacao !== "EXCLUSAO" && (
+              <div className="mt-2 flex items-center" onClick={(e) => e.preventDefault()}>
+                <ResponsavelControl
+                  mapaEntryId={reserva.mapaEntryId}
+                  responsavel={reserva.responsavel}
+                  currentUserId={reserva.currentUserId}
+                  isAdmin={reserva.isAdmin}
+                  readOnly={reserva.readOnly}
+                  variant="compact"
+                />
+              </div>
+            )}
           </div>
           <ChevronRight className={cn("h-4 w-4 mt-1 shrink-0", isExcluded ? "text-vermillion/50" : isAlta ? "text-ash/60" : "text-ash")} />
         </div>

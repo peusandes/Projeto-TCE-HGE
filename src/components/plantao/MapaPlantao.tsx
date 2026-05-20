@@ -6,6 +6,7 @@ import { PacienteCard } from "./PacienteCard";
 import { NovoPacienteDrawer } from "./NovoPacienteDrawer";
 import { ExcelImportSheet } from "./ExcelImportSheet";
 import { PendenciasFiltros } from "./PendenciasFiltros";
+import type { ResponsavelInfo } from "./ResponsavelAvatar";
 import {
   SETORES,
   SETOR_LABEL,
@@ -27,6 +28,8 @@ type MapaItem = {
   comentarios: string | null;
   verificacao_alta: VerificacaoAlta | null;
   ordem: number;
+  responsavel_id?: string | null;
+  responsavel?: ResponsavelInfo | null;
   pacientes: { id: string; nome: string } | null;
 };
 
@@ -34,10 +37,14 @@ export function MapaPlantao({
   plantaoId,
   mapa,
   readOnly,
+  currentUserId,
+  isAdmin,
 }: {
   plantaoId: string;
   mapa: MapaItem[];
   readOnly: boolean;
+  currentUserId: string;
+  isAdmin: boolean;
 }) {
   const [novoSetor, setNovoSetor] = useState<Setor | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -178,6 +185,13 @@ export function MapaPlantao({
                           descricao: item.descricao,
                           comentarios: item.comentarios,
                           verificacao_alta: item.verificacao_alta,
+                        }}
+                        reserva={{
+                          mapaEntryId: item.id,
+                          responsavel: item.responsavel ?? null,
+                          currentUserId,
+                          isAdmin,
+                          readOnly,
                         }}
                       />
                     </li>

@@ -123,6 +123,8 @@ export default async function PlantaoDetailPage({
         plantaoId={plantao.id}
         mapa={mapa as never}
         readOnly={plantao.finalizado}
+        currentUserId={me?.id ?? ""}
+        isAdmin={me?.is_admin ?? false}
       />
 
       <div className="h-32" aria-hidden />

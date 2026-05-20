@@ -7,9 +7,12 @@ import {
   getPaciente,
   getTimelineDoPaciente,
   getAnexosDoPaciente,
+  getReservaDoPaciente,
 } from "@/lib/data/pacientes";
 import { getPlantao } from "@/lib/data/plantoes";
+import { getCurrentPesquisador } from "@/lib/data/pesquisadores";
 import { listColetasDoPaciente } from "@/lib/data/redcap";
+import { ResponsavelControl } from "@/components/plantao/ResponsavelControl";
 import {
   Tabs,
   TabsContent,
@@ -45,11 +48,13 @@ export default async function PacientePage({
     : "resumo";
   const initialOpenInstrument = searchParams.open ?? null;
 
-  const [timeline, anexos, plantao, coletas] = await Promise.all([
+  const [timeline, anexos, plantao, coletas, reserva, me] = await Promise.all([
     getTimelineDoPaciente(paciente.id),
     getAnexosDoPaciente(paciente.id),
     getPlantao(paciente.plantao_id),
     listColetasDoPaciente(paciente.id),
+    getReservaDoPaciente(paciente.id, paciente.plantao_id),
+    getCurrentPesquisador(),
   ]);
 
   // Calcula progresso REDCap: % de instrumentos com pelo menos 1 seq COMPLETE.
@@ -91,6 +96,18 @@ export default async function PacientePage({
         <h1 className="text-[26px] leading-[1.05] font-semibold mt-2 text-ink text-balance">
           {paciente.nome}
         </h1>
+        {reserva && paciente.situacao !== "EXCLUSAO" && me && (
+          <div className="mt-3">
+            <ResponsavelControl
+              mapaEntryId={reserva.mapaEntryId}
+              responsavel={reserva.responsavel}
+              currentUserId={me.id}
+              isAdmin={me.is_admin}
+              readOnly={reserva.plantaoFinalizado}
+              variant="full"
+            />
+          </div>
+        )}
         <div className="mt-3 flex items-center gap-2 flex-wrap">
           <span className="inline-flex items-center gap-1.5 px-2 py-[3px] rounded-full text-[10px] uppercase tracking-[0.08em] font-medium leading-none text-cobalt-soft bg-cobalt/10 border border-cobalt/25">
             <span className="size-1.5 rounded-full bg-cobalt-soft" />
