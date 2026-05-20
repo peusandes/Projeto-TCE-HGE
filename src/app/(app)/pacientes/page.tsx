@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { CalendarClock } from "lucide-react";
 import { listAllPacientesAgrupados } from "@/lib/data/pacientes";
 import { PacienteListItem } from "@/components/paciente/PacienteListItem";
 import { PacientesSearch } from "@/components/paciente/PacientesSearch";
@@ -50,7 +52,14 @@ export default async function PacientesIndexPage() {
       </section>
 
       {total > 0 && (
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <Link
+            href="/pacientes/calendario-gose"
+            className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-paper px-3 h-9 text-[12px] font-medium text-graphite hover:border-cobalt/40 hover:text-ink transition-colors"
+          >
+            <CalendarClock className="h-3.5 w-3.5" strokeWidth={1.8} />
+            Calendário GOS-E
+          </Link>
           <BulkActionsToolbar
             pacientesElegiveis={[...admissao, ...seguimento, ...altaNoMapa]}
           />
