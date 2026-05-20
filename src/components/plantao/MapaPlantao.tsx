@@ -75,7 +75,13 @@ export function MapaPlantao({
   const grupos = useMemo(() => {
     const map = new Map<Setor, MapaItem[]>();
     SETORES.forEach((s) => map.set(s, []));
-    for (const item of filteredMapa) map.get(item.setor)?.push(item);
+    for (const item of filteredMapa) {
+      // Paciente com ALTA cai sempre na seção ALTAS (final do mapa), mesmo
+      // que o snapshot guarde o setor original (ex.: OBSERVACAO_1). Mantém
+      // as áreas ativas limpas e concentra altas num lugar fácil de achar.
+      const bucket: Setor = item.situacao === "ALTA" ? "ALTAS" : item.setor;
+      map.get(bucket)?.push(item);
+    }
     return map;
   }, [filteredMapa]);
 
