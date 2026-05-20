@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { safeRedirectPath } from "@/lib/utils/safe-redirect";
 import type { EmailOtpType } from "@supabase/supabase-js";
 
 /**
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
-  const next = searchParams.get("next") ?? "/auth/setup-account";
+  const next = safeRedirectPath(searchParams.get("next"), "/auth/setup-account");
 
   const supabase = createClient();
 

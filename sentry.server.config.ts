@@ -3,7 +3,9 @@
 
 import * as Sentry from "@sentry/nextjs";
 
-const DSN = process.env.SENTRY_DSN ?? process.env.NEXT_PUBLIC_SENTRY_DSN;
+// Sempre usa NEXT_PUBLIC_SENTRY_DSN — DSN não é secret (já vai no client).
+// SENTRY_AUTH_TOKEN é a secret de verdade (só lê em build pra source maps).
+const DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
 if (DSN) {
   Sentry.init({

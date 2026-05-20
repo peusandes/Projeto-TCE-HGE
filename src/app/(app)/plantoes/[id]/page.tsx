@@ -15,11 +15,14 @@ export const dynamic = "force-dynamic";
 
 export default async function PlantaoDetailPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: { aviso?: string };
 }) {
   const plantao = await getPlantao(params.id);
   if (!plantao) notFound();
+  const avisoPrimeiroPlantao = searchParams?.aviso === "primeiro_plantao";
   const [mapa, me, lembretes] = await Promise.all([
     getMapaDoPlantao(plantao.id),
     getCurrentPesquisador(),
@@ -97,6 +100,15 @@ export default async function PlantaoDetailPage({
           <Stat label="Altas" value={altas} tone="plum" />
         </div>
       </section>
+
+      {/* Aviso: usuário tentou clonar mas era o 1º plantão (mapa vazio) */}
+      {avisoPrimeiroPlantao && (
+        <div className="mt-3 rounded-lg border border-cobalt/30 bg-cobalt/[0.06] px-3 py-2.5 text-[12px] leading-snug text-cobalt-soft">
+          <strong className="text-ink">Este é seu primeiro plantão.</strong>{" "}
+          Não havia plantão anterior pra clonar — o mapa começa vazio. Adicione pacientes
+          conforme entrarem no HGE.
+        </div>
+      )}
 
       {/* Lembretes GOS-E — só aparece quando há pendências (já vencidas). */}
       {lembretes.length > 0 && (

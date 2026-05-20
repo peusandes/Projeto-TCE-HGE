@@ -81,6 +81,9 @@ export async function listGoseLembretes(): Promise<GoseLembrete[]> {
   for (const row of (entries ?? []) as Row[]) {
     const plant = Array.isArray(row.plantoes) ? row.plantoes[0] : row.plantoes;
     if (!plant?.data) continue;
+    // Validação defensiva: ignora datas malformadas (corrompidas teriam
+    // efeito de skipar lembretes do paciente). Espera YYYY-MM-DD.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(plant.data)) continue;
     const atual = primeiroPlantao.get(row.paciente_id);
     if (!atual || plant.data < atual) {
       primeiroPlantao.set(row.paciente_id, plant.data);

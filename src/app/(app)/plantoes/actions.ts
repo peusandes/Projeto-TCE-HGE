@@ -20,6 +20,15 @@ async function requireAdmin() {
   return user;
 }
 
+/**
+ * Cria plantão novo. Se clonar_anterior=true, copia o mapa do plantão mais
+ * recente anterior. Retorna info sobre se houve clone bem-sucedido pro
+ * client poder avisar o user quando o mapa fica vazio (1º plantão criado).
+ *
+ * NOTA: redirect lança NEXT_REDIRECT — handle no caller pra detectar antes
+ * de tratar como erro. Por isso retorno só "executado" em info adicional
+ * via search param (?clonado=0).
+ */
 export async function criarPlantao(input: {
   data: string;
   pesquisadores: string[];
@@ -45,6 +54,10 @@ export async function criarPlantao(input: {
 
   if (error || !novoPlantao) throw error ?? new Error("Falha ao criar plantão");
 
+  // Tentou clonar mas não havia plantão anterior — sinaliza pro client via
+  // ?clonado=vazio pra poder avisar o user (mapa virá vazio mesmo).
+  let cloneStatus: "ok" | "vazio" | "off" = "off";
+
   if (input.clonar_anterior) {
     const { data: anteriores } = await supabase
       .from("plantoes")
@@ -58,11 +71,16 @@ export async function criarPlantao(input: {
         p_plantao_origem: anterior.id,
         p_plantao_destino: novoPlantao.id,
       });
+      cloneStatus = "ok";
+    } else {
+      cloneStatus = "vazio";
     }
   }
 
   revalidatePath("/plantoes");
-  redirect(`/plantoes/${novoPlantao.id}`);
+  const params =
+    cloneStatus === "vazio" ? "?aviso=primeiro_plantao" : "";
+  redirect(`/plantoes/${novoPlantao.id}${params}`);
 }
 
 /**

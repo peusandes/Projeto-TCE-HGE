@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { errMsg } from "@/lib/utils";
+import { safeRedirectPath } from "@/lib/utils/safe-redirect";
 
 export function LoginForm() {
   const search = useSearchParams();
@@ -29,12 +30,9 @@ export function LoginForm() {
       toast.success("Bem-vindo!");
       // Hard nav: garante refresh dos Server Components + execução de middleware
       // sem ficar preso num useTransition se a navegação tomar tempo.
-      // Validação anti-open-redirect: só aceita paths relativos que começam
-      // com "/" mas não com "//" (que vira protocol-relative URL pra outro host).
-      const raw = search.get("redirect");
-      const safe =
-        raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/plantoes";
-      window.location.href = safe;
+      // Anti-open-redirect: aceita só paths relativos (helper compartilhado
+      // com /auth/callback e /auth/confirm).
+      window.location.href = safeRedirectPath(search.get("redirect"), "/plantoes");
     } catch (err) {
       toast.error("Erro", { description: errMsg(err) });
       setPending(false);

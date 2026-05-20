@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { safeRedirectPath } from "@/lib/utils/safe-redirect";
 import type { EmailOtpType } from "@supabase/supabase-js";
 
 /**
@@ -9,13 +10,15 @@ import type { EmailOtpType } from "@supabase/supabase-js";
  * Projeto novo (~2024+) usa o formato OTP por default. Sem tratar isso, o
  * link do convite cai no fallback `/login?error` e o pesquisador acha que
  * tem que se cadastrar / logar.
+ *
+ * `next` é validado contra open-redirect (sem // pra outro host).
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
-  const next = searchParams.get("next") ?? "/plantoes";
+  const next = safeRedirectPath(searchParams.get("next"), "/plantoes");
 
   const supabase = createClient();
 
