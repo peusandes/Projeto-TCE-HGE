@@ -28,7 +28,7 @@ import { SITUACAO_LABEL, SETOR_SHORT } from "@/lib/domain/enums";
 
 export const dynamic = "force-dynamic";
 
-type SearchParams = { tab?: string; open?: string };
+type SearchParams = { tab?: string; open?: string; plantao?: string };
 
 export default async function PacientePage({
   params,
@@ -48,12 +48,18 @@ export default async function PacientePage({
     : "resumo";
   const initialOpenInstrument = searchParams.open ?? null;
 
+  // Plantão de contexto: vem do mapa do plantão atual (?plantao=<id>) para
+  // manter o detalhe do paciente preso AO PLANTÃO em que o usuário está,
+  // não ao plantão original (paciente.plantao_id) — esse cai como fallback
+  // se ninguém passou o contexto na URL.
+  const contextoPlantaoId = searchParams.plantao ?? paciente.plantao_id;
+
   const [timeline, anexos, plantao, coletas, reserva, me] = await Promise.all([
     getTimelineDoPaciente(paciente.id),
     getAnexosDoPaciente(paciente.id),
-    getPlantao(paciente.plantao_id),
+    getPlantao(contextoPlantaoId),
     listColetasDoPaciente(paciente.id),
-    getReservaDoPaciente(paciente.id, paciente.plantao_id),
+    getReservaDoPaciente(paciente.id, contextoPlantaoId),
     getCurrentPesquisador(),
   ]);
 
@@ -80,7 +86,7 @@ export default async function PacientePage({
     <div className="container max-w-2xl py-3 space-y-4">
       <div className="flex items-center justify-between">
         <Link
-          href={`/plantoes/${paciente.plantao_id}`}
+          href={`/plantoes/${contextoPlantaoId}`}
           className="inline-flex items-center gap-1 text-[11px] uppercase tracking-editorial text-ash hover:text-ink min-tap"
         >
           <ChevronLeft className="h-4 w-4" strokeWidth={1.8} />
@@ -151,20 +157,20 @@ export default async function PacientePage({
             coletas={coletas}
             anexos={anexos}
           />
-          <PacienteResumoForm paciente={paciente} />
+          <PacienteResumoForm paciente={paciente} plantaoContextoId={contextoPlantaoId} />
           <TimelineEvolucao items={timeline} />
         </TabsContent>
 
         <TabsContent value="redcap">
           <RedcapTab
-            paciente={{ id: paciente.id, nome: paciente.nome, plantao_id: paciente.plantao_id }}
+            paciente={{ id: paciente.id, nome: paciente.nome, plantao_id: contextoPlantaoId }}
             coletas={coletas}
             initialOpenInstrument={initialOpenInstrument}
           />
         </TabsContent>
 
         <TabsContent value="anexos">
-          <AnexosTab paciente={paciente} anexos={anexos} />
+          <AnexosTab paciente={paciente} anexos={anexos} plantaoContextoId={contextoPlantaoId} />
         </TabsContent>
       </Tabs>
 

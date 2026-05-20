@@ -26,6 +26,10 @@ export async function atualizarPaciente(
       | "verificacao_alta"
     >
   >,
+  /** Plantão de contexto pra espelhar o snapshot em mapa_entries. Quando
+   *  ausente, cai no plantão de origem do paciente (legado). Sempre que
+   *  vier do detalhe do paciente, deve ser o plantão "atual" (URL ?plantao=). */
+  plantaoContextoId?: string,
 ) {
   const supabase = createClient();
   const { data: paciente, error } = await supabase
@@ -36,7 +40,11 @@ export async function atualizarPaciente(
     .single();
   if (error || !paciente) throw error ?? new Error("Falha ao atualizar");
 
-  // Espelha snapshot atual em mapa_entries do plantão de origem (best-effort)
+  const plantaoMirror = plantaoContextoId ?? paciente.plantao_id;
+
+  // Espelha snapshot atual em mapa_entries SOMENTE no plantão de contexto.
+  // Plantões anteriores ficam congelados — cada plantão é uma fotografia
+  // independente do estado naquele momento.
   await supabase
     .from("mapa_entries")
     .update({
@@ -49,10 +57,10 @@ export async function atualizarPaciente(
       verificacao_alta: patch.verificacao_alta,
     })
     .eq("paciente_id", id)
-    .eq("plantao_id", paciente.plantao_id);
+    .eq("plantao_id", plantaoMirror);
 
   revalidatePath(`/pacientes/${id}`);
-  revalidatePath(`/plantoes/${paciente.plantao_id}`);
+  revalidatePath(`/plantoes/${plantaoMirror}`);
 }
 
 /**

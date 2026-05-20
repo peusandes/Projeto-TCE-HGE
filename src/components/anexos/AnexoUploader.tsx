@@ -123,7 +123,15 @@ function fmtSize(bytes: number): string {
 
 /* ─────────── Componente principal ─────────── */
 
-export function AnexoUploader({ paciente }: { paciente: Paciente }) {
+export function AnexoUploader({
+  paciente,
+  plantaoContextoId,
+}: {
+  paciente: Paciente;
+  /** Plantão "atual" pra registrar o anexo. Sem ele, cai no plantão de origem. */
+  plantaoContextoId?: string;
+}) {
+  const plantaoAtivoId = plantaoContextoId ?? paciente.plantao_id;
   const router = useRouter();
   const [files, setFiles] = useState<File[]>([]);
   const [editStates, setEditStates] = useState<ImageEditState[]>([]);
@@ -510,7 +518,7 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
 
       const { error: insertErr } = await supabase.from("anexos").insert({
         paciente_id: paciente.id,
-        plantao_id: paciente.plantao_id,
+        plantao_id: plantaoAtivoId,
         storage_path: path,
         tipo_anexo: tipo,
         data_referencia: dataDestaFoto,
@@ -607,7 +615,7 @@ export function AnexoUploader({ paciente }: { paciente: Paciente }) {
                   const { atualizarPaciente } = await import(
                     "@/app/(app)/pacientes/[id]/actions"
                   );
-                  await atualizarPaciente(paciente.id, { tcle_status: "ASSINADO" });
+                  await atualizarPaciente(paciente.id, { tcle_status: "ASSINADO" }, plantaoAtivoId);
                   toast.success("TCLE marcado como Assinado");
                   router.refresh();
                 } catch (err) {

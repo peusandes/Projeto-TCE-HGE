@@ -37,7 +37,16 @@ const FIELD_LABEL = "text-[10px] uppercase tracking-editorial text-ash";
 const FIELD_INPUT =
   "bg-paper-deep/50 border-hairline focus-visible:border-cobalt focus-visible:ring-0";
 
-export function PacienteResumoForm({ paciente }: { paciente: Paciente }) {
+export function PacienteResumoForm({
+  paciente,
+  plantaoContextoId,
+}: {
+  paciente: Paciente;
+  /** Plantão "atual" pra onde voltar e revalidar. Quando ausente, usa o
+   *  plantão de origem do paciente (legado / link direto). */
+  plantaoContextoId?: string;
+}) {
+  const plantaoAtivoId = plantaoContextoId ?? paciente.plantao_id;
   const [nome, setNome] = useState(paciente.nome);
   const [leito, setLeito] = useState(paciente.leito ?? "");
   const [setor, setSetor] = useState<Setor>(paciente.setor);
@@ -76,7 +85,7 @@ export function PacienteResumoForm({ paciente }: { paciente: Paciente }) {
         try {
           const res = await performWithSync<UpdatePacientePayload>(
             "update_paciente",
-            { id: paciente.id, plantao_id: paciente.plantao_id, patch },
+            { id: paciente.id, plantao_id: plantaoAtivoId, patch },
             { silent: true },
           );
           setSavedAt(new Date());
@@ -84,7 +93,7 @@ export function PacienteResumoForm({ paciente }: { paciente: Paciente }) {
           // pra que ao voltar pra /pacientes ou /plantoes a situação já esteja
           // atualizada — sem precisar de refresh manual.
           if (res === "synced") {
-            revalidarPacienteRoutes(paciente.plantao_id, paciente.id).catch(() => {
+            revalidarPacienteRoutes(plantaoAtivoId, paciente.id).catch(() => {
               // fire-and-forget; se falhar, próxima nav cuida
             });
           }
@@ -281,7 +290,7 @@ export function PacienteResumoForm({ paciente }: { paciente: Paciente }) {
         <ExcluirPacienteButton
           pacienteId={paciente.id}
           pacienteNome={paciente.nome}
-          plantaoId={paciente.plantao_id}
+          plantaoId={plantaoAtivoId}
         />
       </div>
 

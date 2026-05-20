@@ -7,13 +7,15 @@ import type { Paciente, Anexo } from "@/lib/domain/types";
 export function AnexosTab({
   paciente,
   anexos,
+  plantaoContextoId,
 }: {
   paciente: Paciente;
   anexos: Anexo[];
+  plantaoContextoId?: string;
 }) {
   return (
     <div className="space-y-6">
-      <AnexoUploader paciente={paciente} />
+      <AnexoUploader paciente={paciente} plantaoContextoId={plantaoContextoId} />
       <AnexoGaleria anexos={anexos} />
     </div>
   );

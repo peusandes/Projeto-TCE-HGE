@@ -158,7 +158,7 @@ export function RedcapForm({
               const { atualizarPaciente } = await import(
                 "@/app/(app)/pacientes/[id]/actions"
               );
-              await atualizarPaciente(paciente.id, { situacao: "SEG" });
+              await atualizarPaciente(paciente.id, { situacao: "SEG" }, paciente.plantao_id);
               toast.success("Paciente marcado como Seguimento");
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);

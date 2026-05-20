@@ -186,6 +186,7 @@ export function MapaPlantao({
                           comentarios: item.comentarios,
                           verificacao_alta: item.verificacao_alta,
                         }}
+                        plantaoContextoId={plantaoId}
                         reserva={{
                           mapaEntryId: item.id,
                           responsavel: item.responsavel ?? null,

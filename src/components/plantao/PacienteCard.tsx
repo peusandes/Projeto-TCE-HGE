@@ -17,6 +17,10 @@ type Props = {
     comentarios: string | null;
     verificacao_alta?: VerificacaoAlta | null;
   };
+  /** Plantão de onde a navegação parte. Quando definido, o detalhe do paciente
+   *  fica preso a esse plantão (back link + revalidações + reservas). Sem ele,
+   *  o detalhe cai no plantão original do paciente (comportamento legado). */
+  plantaoContextoId?: string;
   /** Reserva opcional — só mostra quando tem mapa_entry_id (mapa do plantão) */
   reserva?: {
     mapaEntryId: string;
@@ -36,16 +40,19 @@ function extractLeitoNumber(raw: string | null): { numeral: string; suffix: stri
   return { numeral: num, suffix };
 }
 
-export function PacienteCard({ paciente, reserva }: Props) {
+export function PacienteCard({ paciente, plantaoContextoId, reserva }: Props) {
   const { numeral, suffix } = extractLeitoNumber(paciente.leito);
   const isExcluded = paciente.situacao === "EXCLUSAO";
   const isAlta = paciente.situacao === "ALTA";
   const isPendenteAlta = paciente.verificacao_alta === "PENDENTE_HGE";
   const isForaDoutore = paciente.verificacao_alta === "FORA_DOUTORE";
   const accent = SITUACAO_ACCENT[paciente.situacao];
+  const href = plantaoContextoId
+    ? `/pacientes/${paciente.id}?plantao=${plantaoContextoId}`
+    : `/pacientes/${paciente.id}`;
 
   return (
-    <Link href={`/pacientes/${paciente.id}`} className="block">
+    <Link href={href} className="block">
       <article
         className={cn(
           "relative rounded-xl border px-4 py-3.5 transition-colors",
