@@ -191,18 +191,25 @@ export function AnexoUploader({
   const isPerFileBatch = files.length > 1 && tipo !== "" && tipo !== "ADMISSAO";
 
   /**
-   * HGT batch: auto-incremento sequencial a partir de dataRef.
-   * Reescreve perFileDates sempre que data base muda — comportamento
-   * documentado no helper text.
+   * HGT batch: auto-incremento sequencial a partir de dataRef. Só PREENCHE
+   * entradas NOVAS (quando arquivos são adicionados) — nunca reescreve as
+   * existentes. Assim:
+   *  - Excluir um arquivo do meio não reseta as outras datas.
+   *  - Editar manualmente uma data sobrevive a mudanças em dataRef.
+   *  - Adicionar mais arquivos depois ainda auto-preenche a partir da base
+   *    atual + índice de partida.
    */
   useEffect(() => {
     if (!isHGTBatch) return;
-    const base = dataRef && isValid(parseISO(dataRef)) ? parseISO(dataRef) : new Date();
-    const next = files.map((_, i) => format(addDays(base, i), "yyyy-MM-dd"));
-    const same =
-      next.length === perFileDates.length &&
-      next.every((d, i) => d === perFileDates[i]);
-    if (!same) setPerFileDates(next);
+    setPerFileDates((prev) => {
+      if (prev.length >= files.length) return prev;
+      const base = dataRef && isValid(parseISO(dataRef)) ? parseISO(dataRef) : new Date();
+      const additions: string[] = [];
+      for (let i = prev.length; i < files.length; i++) {
+        additions.push(format(addDays(base, i), "yyyy-MM-dd"));
+      }
+      return [...prev, ...additions];
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHGTBatch, dataRef, files.length]);
 
@@ -359,6 +366,9 @@ export function AnexoUploader({
     setFiles((prev) => prev.filter((_, idx) => idx !== i));
     setEditStates((prev) => prev.filter((_, idx) => idx !== i));
     setStatuses((prev) => prev.filter((_, idx) => idx !== i));
+    // Mantém o vetor de datas alinhado: sem esse splice o effect rodava com
+    // perFileDates "deslocado" (a data do removido vinha pro arquivo abaixo).
+    setPerFileDates((prev) => prev.filter((_, idx) => idx !== i));
     setActiveIndex((prev) => {
       if (prev === i) return Math.max(0, i - 1);
       if (prev > i) return prev - 1;
