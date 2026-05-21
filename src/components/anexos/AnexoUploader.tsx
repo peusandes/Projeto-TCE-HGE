@@ -183,8 +183,12 @@ export function AnexoUploader({
    * própria editável. Inicializa com data parseada do nome do arquivo (se
    * encontrar padrão DD_MM no filename) ou cai pra dataRef base. NÃO
    * auto-incrementa — vários exames podem ser do mesmo dia.
+   *
+   * ADMISSAO é exceção: é sempre "o dia em que o paciente foi admitido" —
+   * todas as fotos do pacote são desse mesmo dia. Por isso usa só o dataRef
+   * pra todo o lote, sem UI de data por arquivo.
    */
-  const isPerFileBatch = files.length > 1 && tipo !== "";
+  const isPerFileBatch = files.length > 1 && tipo !== "" && tipo !== "ADMISSAO";
 
   /**
    * HGT batch: auto-incremento sequencial a partir de dataRef.
