@@ -54,6 +54,11 @@ export default async function PacientePage({
   // se ninguém passou o contexto na URL.
   const contextoPlantaoId = searchParams.plantao ?? paciente.plantao_id;
 
+  // Origem da navegação. Sem ?plantao= o usuário veio da aba /pacientes
+  // (lista global) — botão de voltar leva pra lá. Com ?plantao=<id>,
+  // veio do mapa daquele plantão e volta pra ele.
+  const veioDoMapa = Boolean(searchParams.plantao);
+
   const [timeline, anexos, plantao, coletas, reserva, me] = await Promise.all([
     getTimelineDoPaciente(paciente.id),
     getAnexosDoPaciente(paciente.id),
@@ -86,11 +91,13 @@ export default async function PacientePage({
     <div className="container max-w-2xl py-3 space-y-4">
       <div className="flex items-center justify-between">
         <Link
-          href={`/plantoes/${contextoPlantaoId}`}
+          href={veioDoMapa ? `/plantoes/${contextoPlantaoId}` : "/pacientes"}
           className="inline-flex items-center gap-1 text-[11px] uppercase tracking-editorial text-ash hover:text-ink min-tap"
         >
           <ChevronLeft className="h-4 w-4" strokeWidth={1.8} />
-          {plantaoLabel} · {SETOR_SHORT[paciente.setor]}
+          {veioDoMapa
+            ? `${plantaoLabel} · ${SETOR_SHORT[paciente.setor]}`
+            : "Pacientes"}
         </Link>
       </div>
 
