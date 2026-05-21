@@ -75,19 +75,20 @@ export function AnexoGaleria({ anexos }: { anexos: Anexo[] }) {
     return acc;
   }, {});
 
-  // Exames laboratoriais e de imagem: ordem cronológica crescente por
-  // data_referencia (mais antigo primeiro). Sem data vai pro fim.
-  // Outros grupos mantêm a ordem de chegada (upload).
-  const TIPOS_CRONOLOGICOS = new Set(["EXAME_LABORATORIAL", "EXAME_IMAGEM"]);
+  // Todos os grupos em ordem cronológica crescente por data_referencia
+  // (mais antigo primeiro). Sem data vai pro fim. Desempate por enviado_em
+  // pra manter ordem estável quando vários do mesmo dia (ex.: HGT manhã/tarde
+  // anexados no mesmo upload). data_referencia é ISO yyyy-MM-dd, então
+  // localeCompare ordena cronologicamente.
   for (const tipo of Object.keys(grupos)) {
-    if (!TIPOS_CRONOLOGICOS.has(tipo)) continue;
     grupos[tipo].sort((a, b) => {
       const da = a.data_referencia ?? "";
       const db = b.data_referencia ?? "";
-      if (!da && !db) return 0;
-      if (!da) return 1;
-      if (!db) return -1;
-      return da.localeCompare(db);
+      if (da && db && da !== db) return da.localeCompare(db);
+      if (!da && db) return 1;
+      if (da && !db) return -1;
+      // Mesma data (ou ambos sem data): usa enviado_em pra desempate estável.
+      return (a.enviado_em ?? "").localeCompare(b.enviado_em ?? "");
     });
   }
 
