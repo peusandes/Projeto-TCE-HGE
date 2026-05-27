@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, FileSpreadsheet, ChevronDown, Search, X } from "lucide-react";
+import { Plus, FileSpreadsheet, ChevronDown, Search, X, Paperclip } from "lucide-react";
 import { PacienteCard } from "./PacienteCard";
 import { NovoPacienteDrawer } from "./NovoPacienteDrawer";
 import { ExcelImportSheet } from "./ExcelImportSheet";
+import { BatchUploadDrawer } from "@/components/anexos/BatchUploadDrawer";
 import { PendenciasFiltros } from "./PendenciasFiltros";
 import type { ResponsavelInfo } from "./ResponsavelAvatar";
 import {
@@ -48,6 +49,7 @@ export function MapaPlantao({
 }) {
   const [novoSetor, setNovoSetor] = useState<Setor | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<Setor>>(new Set());
   /** Quando setado, só renderiza pacientes com paciente_id nesse Set. */
   const [filterIds, setFilterIds] = useState<Set<string> | null>(null);
@@ -235,6 +237,14 @@ export function MapaPlantao({
           </button>
           <button
             type="button"
+            onClick={() => setBatchOpen(true)}
+            className="fixed bottom-[152px] left-5 size-12 rounded-full bg-paper-deep border border-hairline flex items-center justify-center text-cobalt z-30 active:scale-[0.98] transition-transform"
+            aria-label="Upload em lote de exames laboratoriais"
+          >
+            <Paperclip className="h-4 w-4" strokeWidth={1.6} />
+          </button>
+          <button
+            type="button"
             onClick={() => setNovoSetor("FORA_DO_MAPA")}
             className="fixed bottom-24 right-5 z-30 inline-flex items-center gap-2 px-5 h-12 rounded-full bg-cobalt text-white shadow-lg active:scale-[0.98] transition-transform safe-bottom"
             aria-label="Novo paciente"
@@ -255,6 +265,14 @@ export function MapaPlantao({
         plantaoId={plantaoId}
         open={importOpen}
         onClose={() => setImportOpen(false)}
+      />
+      <BatchUploadDrawer
+        plantaoId={plantaoId}
+        pacientes={mapa
+          .filter((m) => m.pacientes != null)
+          .map((m) => ({ id: m.paciente_id, nome: m.pacientes!.nome }))}
+        open={batchOpen}
+        onClose={() => setBatchOpen(false)}
       />
     </>
   );

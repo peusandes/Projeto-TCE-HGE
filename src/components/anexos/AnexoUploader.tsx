@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addDays, parseISO, isValid } from "date-fns";
-import imageCompression from "browser-image-compression";
 import { useRouter } from "next/navigation";
 import {
   Drawer,
@@ -45,9 +44,16 @@ import {
 import { TIPOS_ANEXO, TIPO_ANEXO_LABEL, type TipoAnexo } from "@/lib/domain/enums";
 import type { Paciente } from "@/lib/domain/types";
 import { createClient } from "@/lib/supabase/client";
-import { buildStoragePath } from "@/lib/utils/storage-path";
-import { getCroppedBlob } from "@/lib/utils/crop-image";
 import { parseDateFromFilename } from "@/lib/utils/parse-filename-date";
+import {
+  isHeicFile,
+  isImageFile,
+  isPdfFile,
+  isEditableImage,
+  fmtSize,
+  uploadOne as pipelineUploadOne,
+  EMPTY_EDIT,
+} from "@/lib/anexos/upload-pipeline";
 import { ImageEditor, type ImageEditState } from "./ImageEditor";
 import { cn, errMsg } from "@/lib/utils";
 
@@ -61,8 +67,6 @@ const FIELD_INPUT =
 const MAX_FILES_PER_BATCH = 25;
 const MAX_FILE_MB = 50;
 const MAX_BATCH_MB = 300;
-// Imagens menores que isso e sem edição: sobem cruas (skip do canvas).
-const COMPRESS_SKIP_MB = 1.5;
 // Quantos arquivos em paralelo. 3 é um sweet spot — paraleliza rede sem
 // triplicar pico de memória da compressão.
 const CONCURRENCY = 3;
@@ -88,38 +92,7 @@ const TIPO_ORDER: TipoAnexo[] = [
   "OUTRO",
 ];
 
-const EMPTY_EDIT: ImageEditState = { appliedCrop: null, rotation: 0 };
-
 type FileStatus = "queued" | "uploading" | "done" | "error";
-
-/* ─────────── Detecção de tipo ─────────── */
-
-function isHeicFile(f: File) {
-  if (/^image\/hei[cf]/i.test(f.type)) return true;
-  return /\.(hei[cf])$/i.test(f.name);
-}
-function isImageFile(f: File) {
-  if (f.type.startsWith("image/")) return true;
-  if (isHeicFile(f)) return true;
-  // Algumas câmeras Android salvam sem mime — checa extensão.
-  return /\.(jpe?g|png|gif|webp|avif|tiff?|bmp|heic|heif)$/i.test(f.name);
-}
-function isPdfFile(f: File) {
-  if (f.type === "application/pdf") return true;
-  return /\.pdf$/i.test(f.name);
-}
-function isEditableImage(f: File) {
-  // Qualquer imagem entra no editor — Safari decoda HEIC no canvas (iPhone
-  // funciona normalmente). Em browsers sem suporte HEIC, o preview pode
-  // ficar em branco, mas o try/catch do processOne resolve no upload.
-  if (!isImageFile(f)) return false;
-  return true;
-}
-function fmtSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 /* ─────────── Componente principal ─────────── */
 
@@ -395,76 +368,6 @@ export function AnexoUploader({
     [activeIndex],
   );
 
-  /* ─── Pipeline por arquivo ─── */
-
-  async function processOne(
-    f: File,
-    edit: ImageEditState,
-  ): Promise<{ blob: File | Blob; mimeType: string; outName: string }> {
-    const hasEdit = edit.appliedCrop !== null || edit.rotation !== 0;
-
-    // PDF: passa direto.
-    if (isPdfFile(f)) {
-      return {
-        blob: f,
-        mimeType: f.type || "application/pdf",
-        outName: f.name,
-      };
-    }
-
-    // HEIC ou imagem que o canvas não decodifica: sobe cru.
-    if (!isEditableImage(f)) {
-      const mime =
-        f.type ||
-        (isHeicFile(f) ? (/\.heif$/i.test(f.name) ? "image/heif" : "image/heic") : "application/octet-stream");
-      return { blob: f, mimeType: mime, outName: f.name };
-    }
-
-    let blob: File | Blob = f;
-    let outName = f.name;
-    let mime = f.type || "image/jpeg";
-
-    if (hasEdit) {
-      const url = URL.createObjectURL(f);
-      try {
-        blob = await getCroppedBlob(url, edit.appliedCrop, edit.rotation, 0.92);
-        outName = f.name.replace(/\.[^.]+$/, "") + ".jpg";
-        mime = "image/jpeg";
-      } catch (err) {
-        // Browser sem suporte ao formato (ex.: HEIC fora do Safari) —
-        // sobe original sem edição em vez de derrubar o upload.
-        console.warn("[anexo] crop/rotação falhou, subindo original:", err);
-        blob = f;
-        outName = f.name;
-        mime = f.type || mime;
-      } finally {
-        URL.revokeObjectURL(url);
-      }
-    }
-
-    // Skip de compressão pra arquivos já pequenos sem edição — sem ganho real
-    // e poupa CPU/memória do mobile.
-    if (!hasEdit && blob.size <= COMPRESS_SKIP_MB * 1024 * 1024) {
-      return { blob, mimeType: mime, outName };
-    }
-
-    // Compressão best-effort.
-    try {
-      const compressed = await imageCompression(
-        new File([blob], outName, { type: mime }),
-        { maxSizeMB: 1.5, maxWidthOrHeight: 1920, useWebWorker: true },
-      );
-      return {
-        blob: compressed,
-        mimeType: compressed.type || mime,
-        outName,
-      };
-    } catch (err) {
-      console.warn("[anexo] compressão falhou, subindo original:", err);
-      return { blob, mimeType: mime, outName };
-    }
-  }
-
   /* ─── Pool de upload concorrente ─── */
 
   function setStatusAt(i: number, s: FileStatus) {
@@ -486,62 +389,37 @@ export function AnexoUploader({
     const edit = editStates[i] ?? EMPTY_EDIT;
     setStatusAt(i, "uploading");
 
-    // Timeout de 90s por arquivo + suporte a cancelamento manual via reset.
     const controller = new AbortController();
     abortRefs.current.set(i, controller);
-    const timeoutId = setTimeout(() => controller.abort(new Error("Timeout (90s)")), 90_000);
 
     try {
       const supabase = createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (controller.signal.aborted) throw controller.signal.reason ?? new Error("Abortado");
-
-      const { blob, mimeType, outName } = await processOne(f, edit);
-      if (controller.signal.aborted) throw controller.signal.reason ?? new Error("Abortado");
 
       // Per-file batch (HGT auto-incrementa, outros tipos editáveis):
       // cada arquivo usa sua própria data; single file usa a base.
       const dataDestaFoto =
         isPerFileBatch && perFileDates[i] ? perFileDates[i] : dataRef || null;
 
-      const path = buildStoragePath({
-        paciente_id: paciente.id,
-        tipo_anexo: tipo as TipoAnexo,
-        data_referencia: dataDestaFoto,
-        filename: outName,
-      });
-
-      // Promise.race contra abort signal — supabase-js não aceita signal direto.
-      const uploadPromise = supabase.storage
-        .from("anexos-tce")
-        .upload(path, blob, {
-          contentType: mimeType || "application/octet-stream",
-          upsert: false,
-        });
-      const { error: upErr } = await Promise.race([
-        uploadPromise,
-        new Promise<{ error: Error }>((_, reject) => {
-          controller.signal.addEventListener("abort", () =>
-            reject(controller.signal.reason ?? new Error("Abortado")),
-          );
-        }),
-      ]);
-      if (upErr) throw upErr;
-
-      const { error: insertErr } = await supabase.from("anexos").insert({
+      const result = await pipelineUploadOne(supabase, {
+        file: f,
+        edit,
         paciente_id: paciente.id,
         plantao_id: plantaoAtivoId,
-        storage_path: path,
-        tipo_anexo: tipo,
+        tipo_anexo: tipo as TipoAnexo,
         data_referencia: dataDestaFoto,
         descricao: descricao || null,
-        mime_type: mimeType || "application/octet-stream",
-        tamanho_bytes: blob.size,
         enviado_por: user?.id ?? null,
+        controller,
       });
-      if (insertErr) throw insertErr;
+
+      if (!result.ok) {
+        console.error(`[anexo] ${f.name} falhou:`, result.error);
+        setStatusAt(i, "error");
+        return "error";
+      }
       setStatusAt(i, "done");
       return "done";
     } catch (err) {
@@ -549,7 +427,6 @@ export function AnexoUploader({
       setStatusAt(i, "error");
       return "error";
     } finally {
-      clearTimeout(timeoutId);
       abortRefs.current.delete(i);
     }
   }

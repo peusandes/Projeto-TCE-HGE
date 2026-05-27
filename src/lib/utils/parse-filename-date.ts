@@ -1,11 +1,12 @@
 /**
  * Tenta extrair uma data do nome de arquivo seguindo padrões comuns que
  * pesquisadores usam ao nomear exames: "Lab_18_05.pdf", "Exame 18-05-2026.pdf",
- * "Hemograma.18.05.pdf", etc.
+ * "Hemograma.18.05.pdf", "Gerson Barretto Lopes 21_05.pdf" etc.
  *
  * Regras:
  *  - Procura DD[separador]MM[separador]YYYY (ano só se 4 dígitos)
- *  - Separadores aceitos: _ - .
+ *  - Separadores aceitos: _ - . e ESPAÇO (no separador entre números só
+ *    `_ - .`; entre o nome e a data qualquer whitespace serve).
  *  - Dia 1-31, mês 1-12 (valida data real — 31/02 não passa)
  *  - Sem ano explícito → usa o ano atual
  *  - Não aceita ano de 2 dígitos (ambíguo: "05_03_18" — 18 é dia? mês? ano?)
@@ -14,12 +15,24 @@
  * Lookahead/behind `(?<!\d)` e `(?!\d)` evitam matchar números maiores tipo
  * "12345_67890" — `\b` não funcionaria porque `_` é word char em JS regex.
  *
- * Retorna ISO date "YYYY-MM-DD" ou null se não achar nada válido.
+ * `parseDateFromFilename` retorna ISO date "YYYY-MM-DD" ou null.
+ * `parseDateFromFilenameWithIndex` retorna `{ date, start, end }` (start/end
+ * são índices do match no nome SEM extensão), útil pra fatiar o restante do
+ * filename como nome do paciente.
  */
-export function parseDateFromFilename(
+export type FilenameDateMatch = {
+  /** ISO YYYY-MM-DD */
+  date: string;
+  /** Índice (inclusivo) do início do match dentro do filename sem extensão */
+  start: number;
+  /** Índice (exclusivo) do fim do match dentro do filename sem extensão */
+  end: number;
+};
+
+export function parseDateFromFilenameWithIndex(
   filename: string,
   currentYear?: number,
-): string | null {
+): FilenameDateMatch | null {
   const year = currentYear ?? new Date().getFullYear();
 
   // Remove extensão pra não confundir parser
@@ -47,7 +60,18 @@ export function parseDateFromFilename(
       continue;
     }
 
-    return `${y}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    return {
+      date: `${y}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+      start: m.index,
+      end: m.index + m[0].length,
+    };
   }
   return null;
+}
+
+export function parseDateFromFilename(
+  filename: string,
+  currentYear?: number,
+): string | null {
+  return parseDateFromFilenameWithIndex(filename, currentYear)?.date ?? null;
 }
