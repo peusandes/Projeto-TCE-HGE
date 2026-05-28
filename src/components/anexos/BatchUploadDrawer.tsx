@@ -49,10 +49,9 @@ import { cn } from "@/lib/utils";
 
 /* ─────────── Constantes ─────────── */
 
-// Limites mais generosos que o uploader single (este é o caso de uso de
-// "mandei 30 fotos do dia"). 50/500/50 aprovado pelo Peu.
-const MAX_FILES_PER_BATCH = 50;
-const MAX_BATCH_MB = 500;
+// Limites generosos pra cobrir lote grande (~plantão inteiro de uma vez).
+const MAX_FILES_PER_BATCH = 100;
+const MAX_BATCH_MB = 1000;
 const MAX_FILE_MB = 50;
 const CONCURRENCY = 3;
 const TIPO_LOTE = "EXAME_LABORATORIAL" as const;
