@@ -20,6 +20,7 @@ export async function getPaciente(id: string): Promise<Paciente | null> {
 export type ReservaInfo = {
   mapaEntryId: string;
   responsavel: ResponsavelInfo | null;
+  concluido: boolean;
   plantaoFinalizado: boolean;
 };
 
@@ -36,7 +37,7 @@ export async function getReservaDoPaciente(
   const { data, error } = await supabase
     .from("mapa_entries")
     .select(
-      `id, plantao_id, responsavel:responsavel_id(id, nome, avatar_url), plantoes(finalizado)`,
+      `id, plantao_id, concluido_em, responsavel:responsavel_id(id, nome, avatar_url), plantoes(finalizado)`,
     )
     .eq("paciente_id", paciente_id)
     .eq("plantao_id", plantao_id)
@@ -56,6 +57,7 @@ export async function getReservaDoPaciente(
             avatar_url: (resp.avatar_url as string | null) ?? null,
           }
         : null,
+    concluido: data.concluido_em != null,
     plantaoFinalizado: Boolean(plant?.finalizado),
   };
 }

@@ -31,6 +31,7 @@ type MapaItem = {
   ordem: number;
   responsavel_id?: string | null;
   responsavel?: ResponsavelInfo | null;
+  concluido_em?: string | null;
   pacientes: { id: string; nome: string } | null;
 };
 
@@ -198,6 +199,7 @@ export function MapaPlantao({
                         reserva={{
                           mapaEntryId: item.id,
                           responsavel: item.responsavel ?? null,
+                          concluido: item.concluido_em != null,
                           currentUserId,
                           isAdmin,
                           readOnly,

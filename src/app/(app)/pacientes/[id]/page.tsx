@@ -114,6 +114,7 @@ export default async function PacientePage({
             <ResponsavelControl
               mapaEntryId={reserva.mapaEntryId}
               responsavel={reserva.responsavel}
+              concluido={reserva.concluido}
               currentUserId={me.id}
               isAdmin={me.is_admin}
               readOnly={reserva.plantaoFinalizado}

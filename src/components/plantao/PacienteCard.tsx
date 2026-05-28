@@ -25,6 +25,7 @@ type Props = {
   reserva?: {
     mapaEntryId: string;
     responsavel: ResponsavelInfo | null;
+    concluido: boolean;
     currentUserId: string;
     isAdmin: boolean;
     readOnly: boolean;
@@ -127,6 +128,7 @@ export function PacienteCard({ paciente, plantaoContextoId, reserva }: Props) {
                 <ResponsavelControl
                   mapaEntryId={reserva.mapaEntryId}
                   responsavel={reserva.responsavel}
+                  concluido={reserva.concluido}
                   currentUserId={reserva.currentUserId}
                   isAdmin={reserva.isAdmin}
                   readOnly={reserva.readOnly}
