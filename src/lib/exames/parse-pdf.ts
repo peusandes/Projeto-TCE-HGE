@@ -6,7 +6,10 @@ import { extractText, getDocumentProxy } from "unpdf";
  * runtime Node do Vercel). Retorna todas as páginas concatenadas.
  */
 export async function extrairTextoPdf(bytes: ArrayBuffer | Uint8Array): Promise<string> {
-  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  // unpdf exige Uint8Array "puro" — um Buffer (subclasse) é recusado, então
+  // normalizamos copiando pra um Uint8Array simples.
+  let data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  if (data.constructor !== Uint8Array) data = new Uint8Array(data);
   const pdf = await getDocumentProxy(data);
   const result = await extractText(pdf, { mergePages: true });
   const text = result.text as unknown as string | string[];
