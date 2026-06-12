@@ -12,6 +12,7 @@ import { parseLaudo } from "./parse-laudo";
 import { parseFilename } from "./parse-filename";
 import { planejarSeguimentos } from "./seguimento-plan";
 import { LOCAL_PCT_LABEL } from "./local";
+import { usuarioNaEnvAllowlist } from "@/lib/telegram/auth";
 import {
   listarPacientes,
   getDataNascimento,
@@ -22,6 +23,8 @@ import {
   getPendingById,
   getUltimoPending,
   apagarPending,
+  usuarioNoBanco,
+  autorizarUsuario,
   type PacienteRef,
 } from "./repo";
 import type { LaudoParse } from "./types";
@@ -336,6 +339,49 @@ async function onText(msg: TgMessage): Promise<void> {
   }
   await apagarPending(pending.id);
   await gravarExame(chatId, p.paciente, admIso, p.parse, p.examIso, p.ligante);
+}
+
+/**
+ * Controle de acesso por código compartilhado. Retorna true se o usuário já
+ * está liberado (env allowlist ou tabela telegram_users). Se não estiver,
+ * trata a mensagem como tentativa de código: acertou → libera e salva o ID;
+ * errou → pede o código. Em ambos os casos retorna false (não processa o
+ * conteúdo desta mensagem).
+ */
+export async function garantirAcesso(update: TgUpdate): Promise<boolean> {
+  const msg = update.message;
+  const cb = update.callback_query;
+  const userId = msg?.from?.id ?? cb?.from?.id;
+  const chatId = msg?.chat.id ?? cb?.message?.chat.id;
+  if (userId == null || chatId == null) return false;
+
+  if (usuarioNaEnvAllowlist(userId) || (await usuarioNoBanco(userId))) return true;
+
+  // Não liberado. Callback de quem não tem acesso → bloqueia.
+  if (cb) {
+    await answerCallbackQuery(cb.id, "Acesso não liberado.");
+    return false;
+  }
+
+  const code = process.env.TELEGRAM_ACCESS_CODE?.trim();
+  const txt = (msg?.text ?? "").trim();
+  const candidato = txt.startsWith("/start ") ? txt.slice(7).trim() : txt;
+
+  if (code && candidato && candidato === code) {
+    await autorizarUsuario(userId, nomeRemetente(msg?.from));
+    await sendMessage(
+      chatId,
+      "✅ Acesso liberado! Agora é só me mandar os PDFs dos exames (nome do arquivo: <code>Nome DD_MM</code>).",
+    );
+    return false;
+  }
+
+  if (code) {
+    await sendMessage(chatId, "🔒 Para usar o bot, mande o <b>código de acesso</b> da liga (peça ao responsável).");
+  } else {
+    await sendMessage(chatId, "🔒 Bot ainda não configurado para liberar acesso. Avise o administrador.");
+  }
+  return false;
 }
 
 export async function handleUpdate(update: TgUpdate): Promise<void> {

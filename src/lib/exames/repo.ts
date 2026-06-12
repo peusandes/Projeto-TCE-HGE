@@ -197,6 +197,26 @@ export async function apagarPending(id: string): Promise<void> {
   await sb.from("telegram_pending").delete().eq("id", id);
 }
 
+// ─── Usuários liberados (acesso por código compartilhado) ────────────────────
+
+export async function usuarioNoBanco(userId: number): Promise<boolean> {
+  const sb = createAdminClient();
+  const { data } = await sb
+    .from("telegram_users")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return Boolean(data);
+}
+
+export async function autorizarUsuario(userId: number, nome: string | null): Promise<void> {
+  const sb = createAdminClient();
+  const { error } = await sb
+    .from("telegram_users")
+    .upsert({ user_id: userId, nome }, { onConflict: "user_id", ignoreDuplicates: true });
+  if (error) throw new Error(`autorizarUsuario: ${error.message}`);
+}
+
 /**
  * Marca um update_id do Telegram como processado. Retorna true se for novo
  * (deve processar) e false se já tinha sido visto (reentrega → ignorar).

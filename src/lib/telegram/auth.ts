@@ -14,10 +14,15 @@ export function webhookSecretOk(req: Request): boolean {
   return req.headers.get("x-telegram-bot-api-secret-token") === expected;
 }
 
-export function usuarioAutorizado(userId: number | undefined | null): boolean {
+/**
+ * Allowlist estática por env (opcional, p/ "admins" fixos). O acesso normal é
+ * por código compartilhado (self-enrollment na tabela telegram_users) — ver
+ * garantirAcesso() em lib/exames/fluxo.ts.
+ */
+export function usuarioNaEnvAllowlist(userId: number | undefined | null): boolean {
   if (userId == null) return false;
   const raw = process.env.TELEGRAM_ALLOWED_USER_IDS;
-  if (!raw || raw.trim() === "") return false; // sem allowlist, ninguém entra
+  if (!raw || raw.trim() === "") return false;
   const ids = raw
     .split(",")
     .map((s) => s.trim())
