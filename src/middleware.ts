@@ -7,6 +7,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icons|manifest.webmanifest|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // Exclui a rota do webhook do Telegram: ela se autentica pelo segredo +
+    // service role; passar pelo middleware de sessão a redirecionava pra
+    // /login (307), e o Telegram não segue redirect.
+    "/((?!_next/static|_next/image|favicon.ico|icons|manifest.webmanifest|sw.js|api/telegram/webhook|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
