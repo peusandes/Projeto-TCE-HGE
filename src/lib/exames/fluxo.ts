@@ -525,23 +525,64 @@ async function onCallback(cb: TgCallback): Promise<void> {
 
 async function onText(msg: TgMessage): Promise<void> {
   const chatId = msg.chat.id;
+  const txt = (msg.text ?? "").trim();
   const pending = await getUltimoPending(chatId);
-  if (!pending || pending.kind !== "await_admission") {
-    await sendMessage(
-      chatId,
-      "📎 Me envie o laudo em PDF com o nome <code>Nome DD_MM</code>. Eu leio e preencho o seguimento no site.",
-    );
+
+  // Resposta da data de admissão (quando o bot perguntou).
+  if (pending && pending.kind === "await_admission") {
+    const p = pending.payload as { paciente: PacienteRef; parse: LaudoParse; examIso: string; ligante: string };
+    const admIso = parseDataLivre(txt, p.examIso);
+    if (!admIso) {
+      await sendMessage(chatId, "Não entendi a data. Responda como <code>09/05</code> ou <code>09/05/2026</code>.");
+      return;
+    }
+    await apagarPending(pending.id);
+    await gravarExame(chatId, p.paciente, admIso, p.parse, p.examIso, p.ligante);
     return;
   }
 
-  const p = pending.payload as { paciente: PacienteRef; parse: LaudoParse; examIso: string; ligante: string };
-  const admIso = parseDataLivre(msg.text ?? "", p.examIso);
-  if (!admIso) {
-    await sendMessage(chatId, "Não entendi a data. Responda como <code>09/05</code> ou <code>09/05/2026</code>.");
+  // /start, /ajuda, /help → mostra como funciona.
+  if (/^\/?(start|ajuda|help)$/i.test(txt)) {
+    await sendMessage(chatId, mensagemAjuda());
     return;
   }
-  await apagarPending(pending.id);
-  await gravarExame(chatId, p.paciente, admIso, p.parse, p.examIso, p.ligante);
+
+  await sendMessage(
+    chatId,
+    "📎 Me envie o laudo em PDF nomeado <code>Nome Sobrenome DD_MM</code>. Digite /ajuda pra ver como funciona.",
+  );
+}
+
+/** Mensagem detalhada de como o bot funciona (boas-vindas / /ajuda). */
+function mensagemAjuda(): string {
+  return [
+    "🤖 <b>Bot de exames — LANC TCE</b>",
+    "",
+    "Eu leio o PDF do laudo laboratorial do HGE e preencho sozinho os exames no <b>seguimento</b> do paciente no site. Você não digita nada.",
+    "",
+    "<b>Como usar</b>",
+    "1. Me envie o laudo em <b>PDF</b> (como arquivo/documento, não foto).",
+    "2. Nomeie o arquivo assim: <code>Nome Sobrenome DD_MM</code>",
+    "   Ex.: <code>Joao Freitas 12_05</code>",
+    "   • o <b>nome</b> identifica o paciente (eu acho ele no site)",
+    "   • a <b>data</b> DD_MM é o dia do exame (sem o ano, uso o atual)",
+    "",
+    "<b>O que eu faço</b>",
+    "• Calculo o dia do seguimento (admissão = dia 1) e preencho os laboratoriais lá.",
+    "• Se faltam dias entre o último seguimento e o exame, crio os dias que faltam em branco.",
+    "• Hemograma, leucograma, plaquetas, coagulograma (TTPa/RNI), gasometria (bicarbonato/lactato/sódio) e bioquímica — tudo com as regras do protocolo.",
+    "",
+    "<b>Casos especiais</b>",
+    "• <b>Dia da alta</b>: ponha <code>alta</code> no nome (ex.: <code>Joao Freitas alta 12_05</code>) → vai pro instrumento Alta, não pro seguimento.",
+    "• <b>Depois do dia 30</b>: o seguimento vai só até o dia 30; eu aviso pra fazer o GOS-E 30.",
+    "• <b>Paciente novo</b>: se o nome não estiver no sistema, eu pergunto se é admissão (aí crio o paciente) ou erro de digitação.",
+    "",
+    "Quando eu tiver dúvida (qual paciente, data de admissão, nascimento que não bate), <b>pergunto aqui mesmo</b> — é só responder ou tocar nos botões.",
+    "",
+    "Pode mandar <b>vários PDFs de uma vez</b>. Depois de gravar, te mando um resumo — confira/corrija no site (fica como INCOMPLETO até você revisar).",
+    "",
+    "Digite /ajuda pra ver isto de novo.",
+  ].join("\n");
 }
 
 /**
@@ -572,15 +613,20 @@ export async function garantirAcesso(update: TgUpdate): Promise<boolean> {
 
   if (code && candidato && candidato === code) {
     await autorizarUsuario(userId, nomeRemetente(msg?.from));
-    await sendMessage(
-      chatId,
-      "✅ Acesso liberado! Agora é só me mandar os PDFs dos exames (nome do arquivo: <code>Nome DD_MM</code>).",
-    );
+    await sendMessage(chatId, "✅ <b>Acesso liberado!</b>");
+    await sendMessage(chatId, mensagemAjuda());
     return false;
   }
 
   if (code) {
-    await sendMessage(chatId, "🔒 Para usar o bot, mande o <b>código de acesso</b> da liga (peça ao responsável).");
+    await sendMessage(
+      chatId,
+      [
+        "👋 Olá! Sou o bot de exames da <b>LANC TCE</b> — leio o PDF do laudo e preencho o seguimento do paciente no site automaticamente.",
+        "",
+        "🔒 Para começar, mande o <b>código de acesso</b> da liga (peça ao responsável).",
+      ].join("\n"),
+    );
   } else {
     await sendMessage(chatId, "🔒 Bot ainda não configurado para liberar acesso. Avise o administrador.");
   }
