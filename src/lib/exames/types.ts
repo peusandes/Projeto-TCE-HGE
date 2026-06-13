@@ -23,10 +23,12 @@ export type LaudoParse = {
 
 /** Resultado de parsear o nome do arquivo enviado no Telegram. */
 export type FilenameParse = {
-  /** Nome do paciente extraído (antes da data). */
+  /** Nome do paciente extraído (antes da data, sem a palavra "alta"). */
   nome: string;
   /** Data do exame em ISO (YYYY-MM-DD), ou null se não houver data no nome. */
   dataIso: string | null;
   /** true quando o ano não estava no nome e foi inferido. */
   anoInferido: boolean;
+  /** true quando o nome do arquivo contém "alta" → exame do dia da alta. */
+  isAlta: boolean;
 };

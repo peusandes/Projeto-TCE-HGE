@@ -21,6 +21,10 @@ const nextConfig = {
     // Next 14.2: necessário pra src/instrumentation.ts ser carregado.
     // Default em Next 15+.
     instrumentationHook: true,
+    // unpdf (parser de PDF do bot do Telegram) usa import.meta pra resolver o
+    // worker do pdf.js. Mantê-lo externo evita o webpack reempacotar e garante
+    // que carregue certo no runtime Node do Vercel.
+    serverComponentsExternalPackages: ["unpdf"],
   },
 };
 

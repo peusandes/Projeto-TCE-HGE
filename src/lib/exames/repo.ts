@@ -103,7 +103,8 @@ export async function commitPlano(input: {
   }
 
   const exame = input.plano.itens.find((i) => i.isExame);
-  if (!exame) throw new Error("plano sem dia de exame");
+  // Sem dia de exame (caso "passou do dia 30"): só criamos os dias em branco.
+  if (!exame) return { criadosBranco, exameSeq: 0 };
 
   if (exame.modo === "atualizar") {
     const { data: atual } = await sb
@@ -138,6 +139,47 @@ export async function commitPlano(input: {
   }
 
   return { criadosBranco, exameSeq: exame.seq };
+}
+
+/**
+ * Grava os laboratoriais no instrumento "alta" (single, seq=1). Mescla com o
+ * que já existe — não apaga campos preenchidos à mão (ex.: hora_alta, óbito).
+ */
+export async function commitAlta(input: {
+  pacienteId: string;
+  plantaoId: string;
+  dados: FormData;
+}): Promise<void> {
+  const sb = createAdminClient();
+  const { data: atual } = await sb
+    .from("coletas_redcap")
+    .select("dados")
+    .eq("paciente_id", input.pacienteId)
+    .eq("tipo", "alta")
+    .eq("seq", 1)
+    .maybeSingle();
+
+  if (atual) {
+    const base = (atual.dados ?? {}) as Record<string, unknown>;
+    const { error } = await sb
+      .from("coletas_redcap")
+      .update({ dados: { ...base, ...input.dados } })
+      .eq("paciente_id", input.pacienteId)
+      .eq("tipo", "alta")
+      .eq("seq", 1);
+    if (error) throw new Error(`commitAlta (update): ${error.message}`);
+  } else {
+    const { error } = await sb.from("coletas_redcap").insert({
+      paciente_id: input.pacienteId,
+      plantao_id: input.plantaoId,
+      tipo: "alta",
+      seq: 1,
+      dados: input.dados,
+      status: "INCOMPLETE",
+      coletado_por: null,
+    });
+    if (error) throw new Error(`commitAlta (insert): ${error.message}`);
+  }
 }
 
 // ─── Estado pendente (perguntas que aguardam resposta no chat) ───────────────

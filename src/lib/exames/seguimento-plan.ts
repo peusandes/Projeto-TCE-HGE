@@ -18,12 +18,17 @@ export type PlanoItem = {
 
 export type Plano = {
   itens: PlanoItem[];
-  /** seq do dia do exame. */
+  /** seq do dia do exame (irrelevante quando excedeuMax). */
   seqExame: number;
   /** número do dia do exame contando a admissão como dia 1. */
   diaExame: number;
+  /** true quando o exame cai depois do dia máximo (30) → labs não preenchidos. */
+  excedeuMax: boolean;
   avisos: string[];
 };
+
+/** Último dia de seguimento do protocolo: dia 30 (no 30º faz-se o GOS-E 30). */
+export const MAX_DIA_SEGUIMENTO = 30;
 
 export type PlanoErro = { erro: string };
 
@@ -43,7 +48,9 @@ export function planejarSeguimentos(input: {
   admissaoIso: string;
   exameIso: string;
   existentes: SeguimentoExistente[];
+  maxDia?: number;
 }): Plano | PlanoErro {
+  const maxDia = input.maxDia ?? MAX_DIA_SEGUIMENTO;
   const admissao = parseISO(input.admissaoIso);
   const exame = parseISO(input.exameIso);
   if (Number.isNaN(admissao.getTime())) return { erro: "Data de admissão inválida." };
@@ -53,6 +60,11 @@ export function planejarSeguimentos(input: {
   if (diaExame < 1) {
     return { erro: "O exame é anterior à data de admissão." };
   }
+
+  // Teto: o seguimento vai só até o dia 30. Se o exame passa disso, garantimos
+  // os seguimentos em branco até o 30 e NÃO lançamos os laboratoriais.
+  const excedeuMax = diaExame > maxDia;
+  const diaAlvo = excedeuMax ? maxDia : diaExame;
 
   const avisos: string[] = [];
   const porData = new Map<string, SeguimentoExistente>();
@@ -65,11 +77,11 @@ export function planejarSeguimentos(input: {
   }
 
   const itens: PlanoItem[] = [];
-  let seqExame = diaExame;
+  let seqExame = excedeuMax ? 0 : diaExame;
 
-  for (let k = 1; k <= diaExame; k++) {
+  for (let k = 1; k <= diaAlvo; k++) {
     const dataIso = format(addDays(admissao, k - 1), "yyyy-MM-dd");
-    const isExame = k === diaExame;
+    const isExame = !excedeuMax && k === diaExame;
     const existente = porData.get(dataIso);
 
     if (existente) {
@@ -97,5 +109,5 @@ export function planejarSeguimentos(input: {
     itens.push({ seq, dataIso, isExame, modo: "criar" });
   }
 
-  return { itens, seqExame, diaExame, avisos };
+  return { itens, seqExame, diaExame, excedeuMax, avisos };
 }

@@ -42,4 +42,38 @@ describe("parseFilename", () => {
   it("data impossível (31/02) → null", () => {
     expect(parseFilename("Fulano 31_02.pdf", HOJE).dataIso).toBeNull();
   });
+
+  it("sem 'alta' no nome → isAlta false", () => {
+    expect(parseFilename("Joao Freitas 12_05.pdf", HOJE).isAlta).toBe(false);
+  });
+});
+
+describe("parseFilename — dia da alta", () => {
+  it("'alta' antes da data", () => {
+    const r = parseFilename("Joao Freitas alta 12_05.pdf", HOJE);
+    expect(r.isAlta).toBe(true);
+    expect(r.nome).toBe("Joao Freitas");
+    expect(r.dataIso).toBe("2026-05-12");
+  });
+
+  it("'alta' depois da data", () => {
+    const r = parseFilename("Joao Freitas 12_05 alta.pdf", HOJE);
+    expect(r.isAlta).toBe(true);
+    expect(r.nome).toBe("Joao Freitas");
+    expect(r.dataIso).toBe("2026-05-12");
+  });
+
+  it("ALTA maiúsculo e com ano", () => {
+    const r = parseFilename("Maria ALTA 03_01_2026.pdf", HOJE);
+    expect(r.isAlta).toBe(true);
+    expect(r.nome).toBe("Maria");
+    expect(r.dataIso).toBe("2026-01-03");
+  });
+
+  it("não confunde 'alta' dentro de palavra (ex.: sobrenome)", () => {
+    // "Peralta" não deve disparar o modo alta.
+    const r = parseFilename("Peralta 12_05.pdf", HOJE);
+    expect(r.isAlta).toBe(false);
+    expect(r.nome).toBe("Peralta");
+  });
 });

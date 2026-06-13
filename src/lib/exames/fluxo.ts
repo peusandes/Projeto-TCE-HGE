@@ -12,6 +12,7 @@ import { parseLaudo } from "./parse-laudo";
 import { parseFilename } from "./parse-filename";
 import { planejarSeguimentos } from "./seguimento-plan";
 import { LOCAL_PCT_LABEL } from "./local";
+import { mapearParaAlta } from "./map-alta";
 import { usuarioNaEnvAllowlist } from "@/lib/telegram/auth";
 import {
   listarPacientes,
@@ -19,6 +20,7 @@ import {
   getAdmissaoIso,
   getSeguimentos,
   commitPlano,
+  commitAlta,
   criarPending,
   getPendingById,
   getUltimoPending,
@@ -116,6 +118,30 @@ async function gravarExame(
     return;
   }
 
+  // Passou do dia 30: garante os seguimentos em branco até o 30 e NÃO lança os
+  // laboratoriais (estão fora da janela do protocolo).
+  if (plano.excedeuMax) {
+    const { criadosBranco } = await commitPlano({
+      pacienteId: paciente.paciente_id,
+      plantaoId: paciente.plantao_id,
+      plano,
+      examDados: {},
+    });
+    const linhas: string[] = [];
+    linhas.push("⚠️ <b>Exame além do dia 30</b>");
+    linhas.push("");
+    linhas.push(`👤 <b>${esc(paciente.nome)}</b>`);
+    linhas.push(`O exame (${fmtBr(examIso)}) cai no dia ${plano.diaExame} de internamento — passou dos 30 dias de seguimento.`);
+    linhas.push("Preenchi os seguimentos só até o <b>dia 30</b> e <b>não lancei</b> estes laboratoriais.");
+    if (criadosBranco.length) {
+      linhas.push(`📋 Criados em branco: ${criadosBranco.length} dia(s) (seq ${criadosBranco[0]}–${criadosBranco[criadosBranco.length - 1]}).`);
+    }
+    linhas.push("");
+    linhas.push("➡️ Deve ser feito o <b>GOS-E 30</b> do paciente.");
+    await sendMessage(chatId, linhas.join("\n"));
+    return;
+  }
+
   const examDados: FormData = { ...parse.dados, data_seg: examIso, ligante_seg: ligante };
   if (parse.localPct != null) examDados.local_pct = parse.localPct;
 
@@ -139,8 +165,42 @@ async function gravarExame(
     linhas.push(`📋 Criados em branco: ${criadosBranco.length} dia(s) (seq ${criadosBranco[0]}–${criadosBranco[criadosBranco.length - 1]})`);
   }
   for (const a of [...parse.avisos, ...plano.avisos]) linhas.push(`⚠️ ${esc(a)}`);
+  if (plano.diaExame === 30) {
+    linhas.push("");
+    linhas.push("📅 <b>Último seguimento (dia 30)</b> — deve ser feito o GOS-E 30 do paciente.");
+  }
   linhas.push("");
   linhas.push("➡️ Para corrigir, abra o paciente no site (seguimento marcado como INCOMPLETO).");
+
+  await sendMessage(chatId, linhas.join("\n"));
+}
+
+/** Grava os laboratoriais no instrumento "alta" (exame do dia da alta). */
+async function gravarAlta(
+  chatId: number,
+  paciente: PacienteRef,
+  parse: LaudoParse,
+  examIso: string,
+  ligante: string,
+): Promise<void> {
+  const dadosAlta: FormData = { ...mapearParaAlta(parse.dados), pesquisador: ligante };
+
+  await commitAlta({
+    pacienteId: paciente.paciente_id,
+    plantaoId: paciente.plantao_id,
+    dados: dadosAlta,
+  });
+
+  const linhas: string[] = [];
+  linhas.push("✅ <b>GRAVADO NA ALTA</b>");
+  linhas.push("");
+  linhas.push(`👤 <b>${esc(paciente.nome)}</b>`);
+  linhas.push(`🏁 Instrumento: Alta · exame de ${fmtBr(examIso)}`);
+  linhas.push("");
+  linhas.push(resumoLabs(parse.dados));
+  for (const a of parse.avisos) linhas.push(`⚠️ ${esc(a)}`);
+  linhas.push("");
+  linhas.push("➡️ Lembre de preencher a <b>Hora da alta</b> e o resto da Alta no site (marcado como INCOMPLETO).");
 
   await sendMessage(chatId, linhas.join("\n"));
 }
@@ -153,6 +213,7 @@ async function comPacienteResolvido(
   parse: LaudoParse,
   examIso: string,
   ligante: string,
+  isAlta: boolean,
   jaConferiuNascimento = false,
 ): Promise<void> {
   if (!jaConferiuNascimento) {
@@ -162,7 +223,7 @@ async function comPacienteResolvido(
         chatId,
         userId,
         kind: "await_birthdate",
-        payload: { paciente, parse, examIso, ligante },
+        payload: { paciente, parse, examIso, ligante, isAlta },
       });
       await sendMessage(
         chatId,
@@ -182,6 +243,12 @@ async function comPacienteResolvido(
       );
       return;
     }
+  }
+
+  // Exame do dia da alta → vai pro instrumento "alta", sem mexer no seguimento.
+  if (isAlta) {
+    await gravarAlta(chatId, paciente, parse, examIso, ligante);
+    return;
   }
 
   const adm = await getAdmissaoIso(paciente.paciente_id);
@@ -240,7 +307,7 @@ async function onDocument(msg: TgMessage): Promise<void> {
 
   if (match.classification === "AUTO" && match.top) {
     const ref = pacientes.find((p) => p.paciente_id === match.top!.paciente_id)!;
-    await comPacienteResolvido(chatId, msg.from!.id, ref, parse, fname.dataIso, ligante);
+    await comPacienteResolvido(chatId, msg.from!.id, ref, parse, fname.dataIso, ligante, fname.isAlta);
     return;
   }
 
@@ -253,7 +320,7 @@ async function onDocument(msg: TgMessage): Promise<void> {
     chatId,
     userId: msg.from!.id,
     kind: "await_patient",
-    payload: { candidatos, parse, examIso: fname.dataIso, ligante },
+    payload: { candidatos, parse, examIso: fname.dataIso, ligante, isAlta: fname.isAlta },
   });
 
   const buttons: InlineButton[][] = candidatos.map((c, i) => [
@@ -290,6 +357,7 @@ async function onCallback(cb: TgCallback): Promise<void> {
     parse: LaudoParse;
     examIso: string;
     ligante: string;
+    isAlta?: boolean;
   };
 
   if (tipo === "p") {
@@ -303,7 +371,7 @@ async function onCallback(cb: TgCallback): Promise<void> {
       await sendMessage(chatId, "Opção inválida. Reenvie o PDF.");
       return;
     }
-    await comPacienteResolvido(chatId, pending.user_id, ref, p.parse, p.examIso, p.ligante);
+    await comPacienteResolvido(chatId, pending.user_id, ref, p.parse, p.examIso, p.ligante, Boolean(p.isAlta));
     return;
   }
 
@@ -314,7 +382,7 @@ async function onCallback(cb: TgCallback): Promise<void> {
       return;
     }
     if (p.paciente) {
-      await comPacienteResolvido(chatId, pending.user_id, p.paciente, p.parse, p.examIso, p.ligante, true);
+      await comPacienteResolvido(chatId, pending.user_id, p.paciente, p.parse, p.examIso, p.ligante, Boolean(p.isAlta), true);
     }
     return;
   }

@@ -85,4 +85,45 @@ describe("planejarSeguimentos", () => {
     });
     expect("erro" in r).toBe(true);
   });
+
+  it("exame no dia 30 → preenche normal (último seguimento)", () => {
+    const p = asPlano(
+      planejarSeguimentos({
+        admissaoIso: "2026-05-01",
+        exameIso: "2026-05-30", // dia 30
+        existentes: [],
+      }),
+    );
+    expect(p.diaExame).toBe(30);
+    expect(p.excedeuMax).toBe(false);
+    expect(p.seqExame).toBe(30);
+    expect(p.itens.find((i) => i.isExame)?.seq).toBe(30);
+  });
+
+  it("exame depois do dia 30 → cria em branco só até o 30, sem dia de exame", () => {
+    const p = asPlano(
+      planejarSeguimentos({
+        admissaoIso: "2026-05-01",
+        exameIso: "2026-06-10", // dia 41
+        existentes: [],
+      }),
+    );
+    expect(p.diaExame).toBe(41);
+    expect(p.excedeuMax).toBe(true);
+    expect(p.itens).toHaveLength(30);
+    expect(p.itens.some((i) => i.isExame)).toBe(false);
+    expect(p.itens[p.itens.length - 1]).toMatchObject({ seq: 30, dataIso: "2026-05-30" });
+  });
+
+  it("passou do 30 mas dias 1–30 já existem → nada a criar", () => {
+    const existentes = Array.from({ length: 30 }, (_, i) => ({
+      seq: i + 1,
+      dataIso: `2026-05-${String(i + 1).padStart(2, "0")}`,
+    }));
+    const p = asPlano(
+      planejarSeguimentos({ admissaoIso: "2026-05-01", exameIso: "2026-06-10", existentes }),
+    );
+    expect(p.excedeuMax).toBe(true);
+    expect(p.itens).toHaveLength(0);
+  });
 });

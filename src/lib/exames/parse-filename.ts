@@ -10,18 +10,26 @@ import type { FilenameParse } from "./types";
  * Sem ano → usa o ano de `hoje`; se isso cair no futuro (ex.: exame "20_12"
  * enviado em janeiro), assume o ano anterior — exame do futuro não existe.
  */
+/** Palavra "alta" isolada (cercada por início/fim ou separador). */
+const ALTA_RE = /(?:^|[\s_.\-])alta(?=$|[\s_.\-])/i;
+
 export function parseFilename(
   filename: string,
   hoje: Date = new Date(),
 ): FilenameParse {
   const semExt = filename.replace(/\.[a-z0-9]+$/i, "").trim();
 
-  const m = semExt.match(
+  // "alta" no nome → exame do dia da alta. Remove a palavra antes de extrair
+  // nome e data (aceita "Nome alta DD_MM" ou "Nome DD_MM alta").
+  const isAlta = ALTA_RE.test(semExt);
+  const base = semExt.replace(ALTA_RE, " ").replace(/\s+/g, " ").trim();
+
+  const m = base.match(
     /^(.*?)[\s_.-]+(\d{1,2})[._\-/](\d{1,2})(?:[._\-/](\d{2,4}))?\s*$/,
   );
 
   if (!m) {
-    return { nome: semExt.replace(/\s+/g, " ").trim(), dataIso: null, anoInferido: false };
+    return { nome: base.replace(/\s+/g, " ").trim(), dataIso: null, anoInferido: false, isAlta };
   }
 
   const nome = m[1].replace(/\s+/g, " ").trim();
@@ -30,7 +38,7 @@ export function parseFilename(
   const anoRaw = m[4];
 
   if (dia < 1 || dia > 31 || mes < 1 || mes > 12) {
-    return { nome, dataIso: null, anoInferido: false };
+    return { nome, dataIso: null, anoInferido: false, isAlta };
   }
 
   let anoInferido = false;
@@ -45,12 +53,12 @@ export function parseFilename(
   let d = new Date(ano, mes - 1, dia);
   // Data inválida (ex.: 31/02) → o JS rola pro mês seguinte; rejeita.
   if (d.getMonth() !== mes - 1 || d.getDate() !== dia) {
-    return { nome, dataIso: null, anoInferido: false };
+    return { nome, dataIso: null, anoInferido: false, isAlta };
   }
 
   if (anoInferido && startOfDay(d) > startOfDay(hoje)) {
     d = subYears(d, 1);
   }
 
-  return { nome, dataIso: format(d, "yyyy-MM-dd"), anoInferido };
+  return { nome, dataIso: format(d, "yyyy-MM-dd"), anoInferido, isAlta };
 }
