@@ -22,6 +22,92 @@ export async function listarPacientes(): Promise<PacienteRef[]> {
   }));
 }
 
+export type PlantaoRef = { id: string; data: string; finalizado: boolean };
+
+/** Plantões mais recentes (pra escolher onde criar um paciente novo). */
+export async function listarPlantoesRecentes(limit = 6): Promise<PlantaoRef[]> {
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("plantoes")
+    .select("id, data, finalizado")
+    .order("data", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`listarPlantoesRecentes: ${error.message}`);
+  return (data ?? []).map((p) => ({
+    id: p.id as string,
+    data: p.data as string,
+    finalizado: Boolean(p.finalizado),
+  }));
+}
+
+/**
+ * Cria um paciente novo (admissão) e a entrada dele no mapa do plantão —
+ * espelha a server action adicionarPaciente. situacao=ADM, tcle=PENDENTE.
+ */
+export async function criarPacienteAdmissao(input: {
+  plantaoId: string;
+  nome: string;
+  setor: string;
+}): Promise<string> {
+  const sb = createAdminClient();
+  const { data: pac, error } = await sb
+    .from("pacientes")
+    .insert({
+      plantao_id: input.plantaoId,
+      nome: input.nome,
+      setor: input.setor,
+      leito: null,
+      situacao: "ADM",
+      tcle_status: "PENDENTE",
+    })
+    .select("id")
+    .single();
+  if (error || !pac) throw new Error(`criarPacienteAdmissao: ${error?.message ?? "sem retorno"}`);
+
+  const { data: maxRow } = await sb
+    .from("mapa_entries")
+    .select("ordem")
+    .eq("plantao_id", input.plantaoId)
+    .order("ordem", { ascending: false })
+    .limit(1);
+  const ordem = ((maxRow?.[0]?.ordem as number | undefined) ?? -1) + 1;
+
+  const { error: meErr } = await sb.from("mapa_entries").insert({
+    plantao_id: input.plantaoId,
+    paciente_id: pac.id,
+    setor: input.setor,
+    leito: null,
+    situacao: "ADM",
+    tcle_status: "PENDENTE",
+    ordem,
+  });
+  if (meErr) throw new Error(`criarPacienteAdmissao (mapa): ${meErr.message}`);
+
+  return pac.id as string;
+}
+
+/** Registra a data de admissão (historia_admissao.hora_admissao). */
+export async function setAdmissaoIso(
+  pacienteId: string,
+  plantaoId: string,
+  iso: string,
+): Promise<void> {
+  const sb = createAdminClient();
+  const { error } = await sb.from("coletas_redcap").upsert(
+    {
+      paciente_id: pacienteId,
+      plantao_id: plantaoId,
+      tipo: "historia_admissao",
+      seq: 1,
+      dados: { hora_admissao: `${iso}T00:00` },
+      status: "INCOMPLETE",
+      coletado_por: null,
+    },
+    { onConflict: "paciente_id,tipo,seq", ignoreDuplicates: true },
+  );
+  if (error) throw new Error(`setAdmissaoIso: ${error.message}`);
+}
+
 function isoDate(v: unknown): string | null {
   if (typeof v !== "string" || v.length < 10) return null;
   return v.slice(0, 10); // "YYYY-MM-DD" (corta a hora se houver)

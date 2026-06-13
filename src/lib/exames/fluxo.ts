@@ -11,9 +11,10 @@ import { extrairTextoPdf } from "./parse-pdf";
 import { parseLaudo } from "./parse-laudo";
 import { parseFilename } from "./parse-filename";
 import { planejarSeguimentos } from "./seguimento-plan";
-import { LOCAL_PCT_LABEL } from "./local";
+import { LOCAL_PCT_LABEL, inferirSetor } from "./local";
 import { mapearParaAlta } from "./map-alta";
 import { usuarioNaEnvAllowlist } from "@/lib/telegram/auth";
+import { SETORES, SETOR_LABEL, type Setor } from "@/lib/domain/enums";
 import {
   listarPacientes,
   getDataNascimento,
@@ -27,7 +28,11 @@ import {
   apagarPending,
   usuarioNoBanco,
   autorizarUsuario,
+  listarPlantoesRecentes,
+  criarPacienteAdmissao,
+  setAdmissaoIso,
   type PacienteRef,
+  type PlantaoRef,
 } from "./repo";
 import type { LaudoParse } from "./types";
 
@@ -205,6 +210,87 @@ async function gravarAlta(
   await sendMessage(chatId, linhas.join("\n"));
 }
 
+// ─── Criação de paciente novo (admissão) ─────────────────────────────────────
+
+type CtxNovo = { nome: string; parse: LaudoParse; examIso: string; ligante: string };
+
+/** Pergunta em qual plantão criar o paciente novo. */
+async function pedirPlantao(chatId: number, userId: number, ctx: CtxNovo): Promise<void> {
+  const plantoes = await listarPlantoesRecentes();
+  if (!plantoes.length) {
+    await sendMessage(chatId, "⚠️ Não há plantões cadastrados. Crie um plantão no site antes de cadastrar o paciente.");
+    return;
+  }
+  const id = await criarPending({
+    chatId,
+    userId,
+    kind: "await_patient",
+    payload: { ...ctx, plantoes },
+  });
+  const buttons: InlineButton[][] = plantoes.map((pl, i) => [
+    { text: `${fmtBr(pl.data)}${pl.finalizado ? " (finalizado)" : ""}`, callback_data: `plt:${id}:${i}` },
+  ]);
+  await sendMessage(
+    chatId,
+    `🗓️ Em qual plantão criar <b>${esc(ctx.nome)}</b> (admissão ${fmtBr(ctx.examIso)})?`,
+    { buttons },
+  );
+}
+
+/** Pergunta o setor quando não dá pra inferir da procedência. */
+async function pedirSetor(
+  chatId: number,
+  userId: number,
+  ctx: CtxNovo & { plantaoId: string },
+): Promise<void> {
+  const id = await criarPending({ chatId, userId, kind: "await_patient", payload: ctx });
+  const buttons: InlineButton[][] = SETORES.map((s, i) => [
+    { text: SETOR_LABEL[s], callback_data: `set:${id}:${i}` },
+  ]);
+  await sendMessage(
+    chatId,
+    `🏥 Não consegui inferir o setor de <b>${esc(ctx.nome)}</b> (procedência: ${esc(ctx.parse.procedencia ?? "—")}). Qual o setor?`,
+    { buttons },
+  );
+}
+
+/** Cria o paciente (admissão), registra a admissão e lança o seguimento dia 1. */
+async function criarAdmissao(
+  chatId: number,
+  nome: string,
+  setor: Setor,
+  plantaoId: string,
+  parse: LaudoParse,
+  examIso: string,
+  ligante: string,
+): Promise<void> {
+  const pacienteId = await criarPacienteAdmissao({ plantaoId, nome, setor });
+  await setAdmissaoIso(pacienteId, plantaoId, examIso);
+
+  const plano = planejarSeguimentos({ admissaoIso: examIso, exameIso: examIso, existentes: [] });
+  if ("erro" in plano) {
+    await sendMessage(chatId, `⚠️ ${esc(plano.erro)}`);
+    return;
+  }
+  const examDados: FormData = { ...parse.dados, data_seg: examIso, ligante_seg: ligante };
+  if (parse.localPct != null) examDados.local_pct = parse.localPct;
+  const { exameSeq } = await commitPlano({ pacienteId, plantaoId, plano, examDados });
+
+  const linhas: string[] = [];
+  linhas.push("✅ <b>PACIENTE CRIADO (admissão)</b>");
+  linhas.push("");
+  linhas.push(`👤 <b>${esc(nome)}</b>`);
+  linhas.push(`🏥 Setor: ${SETOR_LABEL[setor]}`);
+  linhas.push(`📅 Admissão = ${fmtBr(examIso)} · Seguimento dia 1 (seq ${exameSeq})`);
+  linhas.push("");
+  linhas.push(resumoLabs(examDados));
+  for (const a of parse.avisos) linhas.push(`⚠️ ${esc(a)}`);
+  linhas.push("");
+  linhas.push("➡️ Complete no site: leito, TCLE, hora exata da admissão (tudo INCOMPLETO pra revisão).");
+
+  await sendMessage(chatId, linhas.join("\n"));
+}
+
 /** Após ter o paciente resolvido: confere nascimento → admissão → grava. */
 async function comPacienteResolvido(
   chatId: number,
@@ -320,18 +406,18 @@ async function onDocument(msg: TgMessage): Promise<void> {
     chatId,
     userId: msg.from!.id,
     kind: "await_patient",
-    payload: { candidatos, parse, examIso: fname.dataIso, ligante, isAlta: fname.isAlta },
+    payload: { candidatos, parse, examIso: fname.dataIso, ligante, isAlta: fname.isAlta, nome: fname.nome },
   });
 
   const buttons: InlineButton[][] = candidatos.map((c, i) => [
     { text: c.nome, callback_data: `p:${id}:${i}` },
   ]);
-  buttons.push([{ text: "❌ Nenhum desses", callback_data: `p:${id}:x` }]);
+  buttons.push([{ text: "➕ Paciente novo (admissão)", callback_data: `p:${id}:novo` }]);
+  buttons.push([{ text: "✏️ Errei o nome", callback_data: `p:${id}:typo` }]);
 
-  const titulo =
-    match.classification === "NAO_ATRIBUIDO"
-      ? `Não achei "${esc(fname.nome)}" na lista. Qual é o paciente?`
-      : `Qual é o paciente "${esc(fname.nome)}"?`;
+  const titulo = candidatos.length
+    ? `Não tenho certeza de quem é "${esc(fname.nome)}". Escolha abaixo:`
+    : `Não achei "${esc(fname.nome)}" no sistema. É admissão (paciente novo) ou erro no nome?`;
   await sendMessage(chatId, `🔎 ${titulo}`, { buttons });
 }
 
@@ -358,12 +444,28 @@ async function onCallback(cb: TgCallback): Promise<void> {
     examIso: string;
     ligante: string;
     isAlta?: boolean;
+    nome?: string;
+    plantoes?: PlantaoRef[];
+    plantaoId?: string;
   };
 
   if (tipo === "p") {
     await apagarPending(pendingId);
-    if (arg === "x") {
-      await sendMessage(chatId, "Ok, descartei esse PDF. Confira o nome do arquivo e reenvie.");
+    if (arg === "typo") {
+      await sendMessage(chatId, "Ok. Corrija o nome no arquivo e reenvie o PDF.");
+      return;
+    }
+    if (arg === "novo") {
+      if (!p.nome) {
+        await sendMessage(chatId, "Não consegui recuperar o nome. Reenvie o PDF.");
+        return;
+      }
+      await pedirPlantao(chatId, pending.user_id, {
+        nome: p.nome,
+        parse: p.parse,
+        examIso: p.examIso,
+        ligante: p.ligante,
+      });
       return;
     }
     const ref = p.candidatos?.[Number(arg)];
@@ -372,6 +474,39 @@ async function onCallback(cb: TgCallback): Promise<void> {
       return;
     }
     await comPacienteResolvido(chatId, pending.user_id, ref, p.parse, p.examIso, p.ligante, Boolean(p.isAlta));
+    return;
+  }
+
+  if (tipo === "plt") {
+    await apagarPending(pendingId);
+    const pl = p.plantoes?.[Number(arg)];
+    if (!pl || !p.nome) {
+      await sendMessage(chatId, "Opção inválida. Reenvie o PDF.");
+      return;
+    }
+    const setor = inferirSetor(p.parse.procedencia);
+    if (setor) {
+      await criarAdmissao(chatId, p.nome, setor, pl.id, p.parse, p.examIso, p.ligante);
+    } else {
+      await pedirSetor(chatId, pending.user_id, {
+        nome: p.nome,
+        parse: p.parse,
+        examIso: p.examIso,
+        ligante: p.ligante,
+        plantaoId: pl.id,
+      });
+    }
+    return;
+  }
+
+  if (tipo === "set") {
+    await apagarPending(pendingId);
+    const setor = SETORES[Number(arg)];
+    if (!setor || !p.nome || !p.plantaoId) {
+      await sendMessage(chatId, "Opção inválida. Reenvie o PDF.");
+      return;
+    }
+    await criarAdmissao(chatId, p.nome, setor, p.plantaoId, p.parse, p.examIso, p.ligante);
     return;
   }
 
