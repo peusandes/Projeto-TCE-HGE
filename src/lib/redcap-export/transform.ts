@@ -17,10 +17,12 @@
  *    paciente sempre vence — trava de isolação).
  *  - Valor array (checkbox) vira `campo___valor = "1"` por item marcado.
  *  - Datetime "YYYY-MM-DDTHH:mm[:ss]" vira "YYYY-MM-DD HH:mm" (formato REDCap).
- *  - Demais valores viram string.
- *  - Acrescenta `<instrumento>_complete` = 0/1/2 a partir do status.
+ *    Datas "YYYY-MM-DD" seguem como estão (a API do REDCap importa em Y-M-D).
+ *  - `<instrumento>_complete = 2` SÓ quando o instrumento tem dado e o status
+ *    local é COMPLETE — nunca rebaixa o status no REDCap nem marca vazio.
  *  - Instrumentos repetíveis (seguimento) viram linhas próprias com
- *    redcap_repeat_instrument + redcap_repeat_instance = seq.
+ *    redcap_repeat_instrument + redcap_repeat_instance = seq; instâncias sem
+ *    nenhum dado real são puladas.
  */
 
 import { ALL_INSTRUMENTS } from "@/lib/redcap-schema/instruments";
@@ -45,22 +47,19 @@ const CAMPOS_CALC: ReadonlySet<string> = new Set(
   ALL_INSTRUMENTS.flatMap((inst) => inst.fields.filter((f) => f.type === "calc").map((f) => f.name)),
 );
 
-const STATUS_PARA_COMPLETE: Record<string, string> = {
-  INCOMPLETE: "0",
-  UNVERIFIED: "1",
-  COMPLETE: "2",
-};
-
-function valorRedcap(v: unknown): string {
-  if (typeof v === "number") return String(v);
+function valorRedcap(v: unknown): string | null {
+  if (typeof v === "number") return Number.isFinite(v) ? String(v) : null;
   if (typeof v === "string") {
+    if (v === "") return null;
     const m = v.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
     return m ? `${m[1]} ${m[2]}` : v;
   }
-  return String(v);
+  return null; // boolean / objeto / etc — não enviar (evita NaN, [object Object])
 }
 
-function preencher(rec: RedcapRecord, c: ColetaParaExport): void {
+/** Preenche um registro com os campos da coleta. Retorna se escreveu algo. */
+function preencher(rec: RedcapRecord, c: ColetaParaExport): boolean {
+  let escreveu = false;
   for (const [k, v] of Object.entries(c.dados)) {
     if (k.startsWith("_")) continue; // descritivos
     if (k === RECORD_ID_FIELD) continue; // id canônico sempre vence
@@ -70,31 +69,55 @@ function preencher(rec: RedcapRecord, c: ColetaParaExport): void {
       for (const item of v) {
         if (item === null || item === undefined || item === "") continue;
         rec[`${k}___${item}`] = "1";
+        escreveu = true;
       }
       continue;
     }
     const val = valorRedcap(v);
-    if (val !== "") rec[k] = val;
+    if (val !== null) {
+      rec[k] = val;
+      escreveu = true;
+    }
   }
-  rec[`${c.tipo}_complete`] = STATUS_PARA_COMPLETE[c.status] ?? "0";
+  // _complete só pra instrumento COM dado e status COMPLETE — nunca rebaixa.
+  if (escreveu && c.status === "COMPLETE") {
+    rec[`${c.tipo}_complete`] = "2";
+  }
+  return escreveu;
 }
 
 /**
  * Gera os registros REDCap pra um paciente. Instrumentos únicos são fundidos
- * num registro base; cada instância de instrumento repetível vira uma linha.
- * `eventName` só é usado se o projeto for longitudinal (definido na conexão).
+ * num registro base; cada instância de instrumento repetível vira uma linha
+ * (instâncias vazias são puladas). `eventName` só é usado se o projeto for
+ * longitudinal (definido na conexão).
  */
 export function coletasParaRegistros(
   recordId: string,
   coletas: ColetaParaExport[],
   opts: { eventName?: string } = {},
 ): RedcapRecord[] {
+  // Trava: instrumento NÃO-repetível não pode ter instâncias duplicadas (fusão
+  // ambígua, last-write-wins não-determinístico) — aborta antes de enviar lixo.
+  const contagem = new Map<string, number>();
+  for (const c of coletas) {
+    if (!REPETIVEIS.has(c.tipo)) contagem.set(c.tipo, (contagem.get(c.tipo) ?? 0) + 1);
+  }
+  const duplicados = [...contagem.entries()].filter(([, n]) => n > 1).map(([t]) => t);
+  if (duplicados.length > 0) {
+    throw new Error(
+      `Instrumento não-repetível com instâncias duplicadas: ${duplicados.join(", ")}. Corrija no site antes de enviar.`,
+    );
+  }
+
+  // Ordem determinística (tipo, seq) — evita fusão arbitrária.
+  const ordenadas = [...coletas].sort((a, b) => a.tipo.localeCompare(b.tipo) || a.seq - b.seq);
+
   const base: RedcapRecord = { [RECORD_ID_FIELD]: recordId };
   if (opts.eventName) base.redcap_event_name = opts.eventName;
-
   const repetidos: RedcapRecord[] = [];
 
-  for (const c of coletas) {
+  for (const c of ordenadas) {
     if (REPETIVEIS.has(c.tipo)) {
       const rec: RedcapRecord = {
         [RECORD_ID_FIELD]: recordId,
@@ -102,8 +125,7 @@ export function coletasParaRegistros(
         redcap_repeat_instance: String(c.seq),
       };
       if (opts.eventName) rec.redcap_event_name = opts.eventName;
-      preencher(rec, c);
-      repetidos.push(rec);
+      if (preencher(rec, c)) repetidos.push(rec); // pula instância sem dado
     } else {
       preencher(base, c);
     }

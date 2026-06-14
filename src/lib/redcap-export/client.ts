@@ -44,6 +44,35 @@ function parseAutoId(json: unknown): string | undefined {
   return undefined;
 }
 
+/**
+ * Lê a configuração do projeto REDCap. Usado como TRAVA antes de criar paciente:
+ *  - autonumber: se false, NÃO podemos mandar forceAutoNumber (risco de colidir
+ *    com um record real). Bloqueamos a criação automática.
+ *  - longitudinal: se true, todo registro precisa de redcap_event_name.
+ */
+export async function getProjectInfo(): Promise<{ autonumber: boolean; longitudinal: boolean }> {
+  const { url, token } = config();
+  const body = new URLSearchParams({ token, content: "project", format: "json", returnFormat: "json" });
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`REDCap (project info) falhou (${res.status}): ${text.slice(0, 300)}`);
+  let j: Record<string, unknown>;
+  try {
+    j = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    throw new Error(`Resposta inesperada do REDCap (project info): ${text.slice(0, 200)}`);
+  }
+  const truthy = (v: unknown) => v === 1 || v === "1" || v === true;
+  return {
+    autonumber: truthy(j.record_autonumbering_enabled),
+    longitudinal: truthy(j.is_longitudinal),
+  };
+}
+
 export type ImportResult = { count: number; novoRecordId?: string };
 
 /**

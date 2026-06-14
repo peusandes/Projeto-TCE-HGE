@@ -23,7 +23,7 @@ describe("coletasParaRegistros", () => {
     expect(seg1.redcap_repeat_instrument).toBe("seguimento");
     expect(seg1.redcap_repeat_instance).toBe("1");
     expect(seg1.hemoglobina_seg).toBe("15.2");
-    expect(seg1.seguimento_complete).toBe("0");
+    expect(seg1.seguimento_complete).toBeUndefined(); // INCOMPLETE não marca
 
     expect(recs[2].redcap_repeat_instance).toBe("2");
     expect(recs[2].plaquetas_seg).toBe("193");
@@ -53,13 +53,49 @@ describe("coletasParaRegistros", () => {
     expect(recs[0].vazio).toBeUndefined();
   });
 
-  it("mapeia status → _complete (0/1/2)", () => {
-    const mk = (status: string) =>
-      coletasParaRegistros("1", [{ tipo: "alta", seq: 1, status, dados: { hemacias_alta: "3.0" } }])[0]
-        .alta_complete;
-    expect(mk("INCOMPLETE")).toBe("0");
-    expect(mk("UNVERIFIED")).toBe("1");
-    expect(mk("COMPLETE")).toBe("2");
+  it("_complete só quando COMPLETE e com dado (nunca rebaixa nem marca vazio)", () => {
+    const mk = (status: string, dados: Record<string, unknown>) =>
+      coletasParaRegistros("1", [{ tipo: "alta", seq: 1, status, dados }])[0].alta_complete;
+    expect(mk("COMPLETE", { hemacias_alta: "3.0" })).toBe("2");
+    expect(mk("INCOMPLETE", { hemacias_alta: "3.0" })).toBeUndefined();
+    expect(mk("UNVERIFIED", { hemacias_alta: "3.0" })).toBeUndefined();
+    // COMPLETE mas sem dado real → não marca (evita marcar instrumento vazio)
+    expect(mk("COMPLETE", {})).toBeUndefined();
+  });
+
+  it("pula instância de seguimento sem nenhum dado real", () => {
+    const recs = coletasParaRegistros("1", [
+      { tipo: "dados_demograficos", seq: 1, status: "COMPLETE", dados: { sexo: 0 } },
+      { tipo: "seguimento", seq: 1, status: "INCOMPLETE", dados: {} }, // vazia → some
+      { tipo: "seguimento", seq: 2, status: "INCOMPLETE", dados: { hemoglobina_seg: "9.2" } },
+    ]);
+    // base + só o seguimento 2 (o 1 vazio foi pulado)
+    expect(recs).toHaveLength(2);
+    expect(recs[1].redcap_repeat_instance).toBe("2");
+  });
+
+  it("aborta se instrumento NÃO-repetível aparecer duplicado", () => {
+    expect(() =>
+      coletasParaRegistros("1", [
+        { tipo: "alta", seq: 1, status: "COMPLETE", dados: { hemacias_alta: "3.0" } },
+        { tipo: "alta", seq: 2, status: "COMPLETE", dados: { hemacias_alta: "4.0" } },
+      ]),
+    ).toThrow(/duplicad/i);
+  });
+
+  it("descarta valores inválidos (NaN, boolean, objeto)", () => {
+    const recs = coletasParaRegistros("1", [
+      {
+        tipo: "historia_admissao",
+        seq: 1,
+        status: "INCOMPLETE",
+        dados: { pas_adm: 120, ruimNaN: Number("x"), ruimBool: true, ruimObj: { a: 1 } },
+      },
+    ]);
+    expect(recs[0].pas_adm).toBe("120");
+    expect(recs[0].ruimNaN).toBeUndefined();
+    expect(recs[0].ruimBool).toBeUndefined();
+    expect(recs[0].ruimObj).toBeUndefined();
   });
 
   it("longitudinal: inclui redcap_event_name quando passado", () => {

@@ -56,7 +56,6 @@ export function PacienteResumoForm({
   const [descricao, setDescricao] = useState(paciente.descricao ?? "");
   const [comentarios, setComentarios] = useState(paciente.comentarios ?? "");
   const [motivo, setMotivo] = useState(paciente.motivo_exclusao ?? "");
-  const [redcapId, setRedcapId] = useState(paciente.redcap_id ?? "");
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmAlta, setConfirmAlta] = useState(false);
@@ -75,7 +74,6 @@ export function PacienteResumoForm({
     descricao: paciente.descricao ?? "",
     comentarios: paciente.comentarios ?? "",
     motivo: paciente.motivo_exclusao ?? "",
-    redcapId: paciente.redcap_id ?? "",
     verificacao: paciente.verificacao_alta,
   });
 
@@ -120,7 +118,6 @@ export function PacienteResumoForm({
       descricao !== ini.descricao ||
       comentarios !== ini.comentarios ||
       motivo !== ini.motivo ||
-      redcapId !== ini.redcapId ||
       verificacao !== ini.verificacao;
     if (!mudou) return;
     save({
@@ -132,11 +129,10 @@ export function PacienteResumoForm({
       descricao: descricao || null,
       comentarios: comentarios || null,
       motivo_exclusao: motivo || null,
-      redcap_id: redcapId || null,
       verificacao_alta: verificacao,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nome, leito, setor, situacao, tcle, descricao, comentarios, motivo, redcapId, verificacao]);
+  }, [nome, leito, setor, situacao, tcle, descricao, comentarios, motivo, verificacao]);
 
 
   return (
@@ -276,14 +272,15 @@ export function PacienteResumoForm({
 
       <div className="space-y-2">
         <Label htmlFor="redcap" className={FIELD_LABEL}>
-          REDCap ID (após exportação)
+          REDCap ID (definido pelo envio)
         </Label>
         <Input
           id="redcap"
-          value={redcapId}
-          onChange={(e) => setRedcapId(e.target.value)}
-          placeholder="Vazio até exportar"
-          className={cn(FIELD_INPUT, "font-mono")}
+          value={paciente.redcap_id ?? ""}
+          readOnly
+          placeholder="Vazio até enviar ao REDCap"
+          className={cn(FIELD_INPUT, "font-mono bg-paper-deep/70 text-graphite cursor-not-allowed")}
+          title="Definido automaticamente ao enviar para o REDCap"
         />
       </div>
 
