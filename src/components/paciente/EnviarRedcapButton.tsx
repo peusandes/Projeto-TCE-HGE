@@ -85,13 +85,23 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome }: Props) {
               <DialogTitle>Enviar para o REDCap</DialogTitle>
             </div>
             <DialogDescription className="pt-2">
-              Envia <strong className="text-ink">somente este paciente</strong> (
-              {pacienteNome}) pro REDCap. Não mexe em outros pacientes e não apaga
-              nada que já esteja lá.
+              Manda os dados de <strong className="text-ink">{pacienteNome}</strong> pro
+              REDCap (o banco oficial da pesquisa).
             </DialogDescription>
           </DialogHeader>
 
           <div className="text-sm space-y-3">
+            <div className="rounded-md border border-hairline bg-paper-deep/40 p-3 space-y-1.5 text-[12px] text-graphite">
+              <p className="text-ink font-medium">O que acontece ao confirmar:</p>
+              <ul className="space-y-1 list-disc pl-4">
+                <li>Envia <strong className="text-ink">só este paciente</strong> — nenhum outro é tocado.</li>
+                <li>Se ele ainda não existe no REDCap, é <strong className="text-ink">criado</strong>; se já existe, é <strong className="text-ink">atualizado</strong>.</li>
+                <li><strong className="text-ink">Nunca apaga</strong> o que já está no REDCap — só preenche/atualiza os campos que temos aqui.</li>
+                <li>Cada dia de seguimento vira uma instância; instrumentos marcados como completos aqui ficam completos lá.</li>
+                <li>Correções como desmarcar caixinhas ou esvaziar um campo precisam ser feitas direto no REDCap.</li>
+              </ul>
+            </div>
+
             {carregandoPreview && (
               <div className="flex items-center gap-2 text-ash">
                 <Loader2 className="h-4 w-4 animate-spin" /> Montando a prévia…
