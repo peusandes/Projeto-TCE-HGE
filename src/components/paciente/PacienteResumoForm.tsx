@@ -26,6 +26,7 @@ import {
 } from "@/lib/domain/enums";
 import { revalidarPacienteRoutes } from "@/app/(app)/pacientes/[id]/actions";
 import { ExcluirPacienteButton } from "./ExcluirPacienteButton";
+import { EnviarRedcapButton } from "./EnviarRedcapButton";
 import { performWithSync } from "@/lib/sync/perform";
 import type { UpdatePacientePayload } from "@/lib/sync/executors";
 import type { Paciente } from "@/lib/domain/types";
@@ -284,6 +285,10 @@ export function PacienteResumoForm({
           placeholder="Vazio até exportar"
           className={cn(FIELD_INPUT, "font-mono")}
         />
+      </div>
+
+      <div className="pt-4 border-t border-hairline">
+        <EnviarRedcapButton pacienteId={paciente.id} pacienteNome={paciente.nome} />
       </div>
 
       <div className="pt-4 border-t border-hairline">
