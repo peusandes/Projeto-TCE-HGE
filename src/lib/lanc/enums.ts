@@ -101,5 +101,23 @@ export const PACIENTE_STATUS_EXT_PROXIMOS: Record<PacienteStatusExt, PacienteSta
 export const DOCUMENTO_STATUS = ["PENDENTE", "APROVADO", "REJEITADO"] as const;
 export type DocumentoStatus = (typeof DOCUMENTO_STATUS)[number];
 
+export const DOCUMENTO_TIPO = [
+  "rg",
+  "cpf",
+  "comprovante_matricula",
+  "foto_3x4",
+  "termo_voluntariado",
+  "outro",
+] as const;
+export type DocumentoTipo = (typeof DOCUMENTO_TIPO)[number];
+export const DOCUMENTO_TIPO_LABEL: Record<DocumentoTipo, string> = {
+  rg: "RG",
+  cpf: "CPF",
+  comprovante_matricula: "Comprovante de matrícula",
+  foto_3x4: "Foto 3x4",
+  termo_voluntariado: "Termo de voluntariado",
+  outro: "Outro",
+};
+
 export const SIGNUP_STATUS = ["PENDING", "APPROVED", "REJECTED"] as const;
 export type SignupStatus = (typeof SIGNUP_STATUS)[number];
