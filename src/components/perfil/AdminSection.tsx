@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, Database, ScrollText } from "lucide-react";
+import { BarChart3, Database, ScrollText, Users, FileText, Settings } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { listPesquisadores } from "@/lib/data/pesquisadores";
@@ -63,6 +63,60 @@ export async function AdminSection() {
               </p>
               <p className="text-[11px] text-graphite leading-tight mt-0.5">
                 Histórico de mudanças
+              </p>
+            </div>
+          </div>
+        </Link>
+        <Link
+          href="/admin/membros"
+          className="block rounded-xl border border-cobalt/30 bg-cobalt/[0.04] p-4 hover:bg-cobalt/[0.08] transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <span className="size-9 rounded-lg bg-cobalt/15 border border-cobalt/30 flex items-center justify-center text-cobalt-soft shrink-0">
+              <Users className="h-4 w-4" strokeWidth={1.8} />
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[14px] font-semibold text-ink leading-tight">
+                Membros
+              </p>
+              <p className="text-[11px] text-graphite leading-tight mt-0.5">
+                Aprovações, papéis e cargos
+              </p>
+            </div>
+          </div>
+        </Link>
+        <Link
+          href="/admin/documentos"
+          className="block rounded-xl border border-cobalt/30 bg-cobalt/[0.04] p-4 hover:bg-cobalt/[0.08] transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <span className="size-9 rounded-lg bg-cobalt/15 border border-cobalt/30 flex items-center justify-center text-cobalt-soft shrink-0">
+              <FileText className="h-4 w-4" strokeWidth={1.8} />
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[14px] font-semibold text-ink leading-tight">
+                Documentos
+              </p>
+              <p className="text-[11px] text-graphite leading-tight mt-0.5">
+                Upload e aprovação
+              </p>
+            </div>
+          </div>
+        </Link>
+        <Link
+          href="/admin/settings"
+          className="block rounded-xl border border-cobalt/30 bg-cobalt/[0.04] p-4 hover:bg-cobalt/[0.08] transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <span className="size-9 rounded-lg bg-cobalt/15 border border-cobalt/30 flex items-center justify-center text-cobalt-soft shrink-0">
+              <Settings className="h-4 w-4" strokeWidth={1.8} />
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[14px] font-semibold text-ink leading-tight">
+                Configurações
+              </p>
+              <p className="text-[11px] text-graphite leading-tight mt-0.5">
+                Parâmetros do sistema
               </p>
             </div>
           </div>
