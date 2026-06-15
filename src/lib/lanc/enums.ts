@@ -37,6 +37,14 @@ export const DIA_SEMANA_CURTO: Record<number, string> = {
   6: "Sáb",
 };
 
+/** Dias com turno da TARDE no estágio (Seg/Ter/Qui/Sex); resto só manhã. */
+export const DIAS_COM_TARDE: ReadonlySet<number> = new Set([1, 2, 4, 5]);
+export function turnosDoDia(diaSemana: number): Turno[] {
+  return DIAS_COM_TARDE.has(diaSemana) ? ["MANHA", "TARDE"] : ["MANHA"];
+}
+/** Ordem de exibição da grade: Seg→Dom. */
+export const DIAS_ORDEM: number[] = [1, 2, 3, 4, 5, 6, 0];
+
 export const ESTAGIO_SOLIC_TIPO = ["ENTRAR", "TROCAR", "SAIR"] as const;
 export type EstagioSolicTipo = (typeof ESTAGIO_SOLIC_TIPO)[number];
 export const ESTAGIO_SOLIC_TIPO_LABEL: Record<EstagioSolicTipo, string> = {
