@@ -82,11 +82,11 @@ export const PACIENTE_STATUS_EXT_LABEL: Record<PacienteStatusExt, string> = {
   FORA_DO_MAPA: "Fora do mapa",
   ALTA: "Alta",
 };
-/** Transições válidas do fluxo do paciente da extensão. */
+/** Transições válidas do fluxo do paciente da extensão (espelha o lanc-app). */
 export const PACIENTE_STATUS_EXT_PROXIMOS: Record<PacienteStatusExt, PacienteStatusExt[]> = {
-  ADMISSAO: ["NO_MAPA", "FORA_DO_MAPA", "ALTA"],
+  ADMISSAO: ["NO_MAPA", "ALTA"],
   NO_MAPA: ["FORA_DO_MAPA", "ALTA"],
-  FORA_DO_MAPA: ["ALTA"],
+  FORA_DO_MAPA: ["NO_MAPA", "ALTA"],
   ALTA: [],
 };
 
