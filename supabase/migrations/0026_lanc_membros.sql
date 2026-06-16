@@ -7,11 +7,14 @@
 -- IDs em `text` (não uuid) pra aceitar os cuids existentes do lanc-app na futura
 -- migração de dados; novas linhas ganham um id gerado.
 
--- ── Gatilho reutilizável de updated_at ──────────────────────────────────────
+-- ── Gatilho reutilizável de atualizado_em ───────────────────────────────────
+-- O schema inteiro usa a coluna PT-BR `atualizado_em`; nenhuma tabela tem
+-- `updated_at`. Escrever no nome certo evita erro 42703 ("record new has no
+-- field updated_at") em todo UPDATE das tabelas que usam este gatilho.
 create or replace function public.touch_updated_at()
 returns trigger language plpgsql as $$
 begin
-  new.updated_at := now();
+  new.atualizado_em := now();
   return new;
 end;
 $$;
@@ -57,10 +60,13 @@ create table if not exists public.signup_requests (
   revisado_por text,
   revisado_em timestamptz,
   criado_em   timestamptz not null default now(),
-  atualizado_em timestamptz not null default now(),
-  unique (email, status)
+  atualizado_em timestamptz not null default now()
 );
 create index if not exists signup_requests_status_idx on public.signup_requests(status, criado_em);
+-- No máximo 1 solicitação PENDING por email; não trava re-tentativas após
+-- rejeição/aprovação (nem a importação de histórico do lanc-app).
+create unique index if not exists signup_requests_email_pending_uniq
+  on public.signup_requests(email) where status = 'PENDING';
 drop trigger if exists signup_requests_touch on public.signup_requests;
 create trigger signup_requests_touch before update on public.signup_requests
   for each row execute function public.touch_updated_at();
