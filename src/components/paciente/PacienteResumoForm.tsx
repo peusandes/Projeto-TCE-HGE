@@ -285,7 +285,11 @@ export function PacienteResumoForm({
       </div>
 
       <div className="pt-4 border-t border-hairline">
-        <EnviarRedcapButton pacienteId={paciente.id} pacienteNome={paciente.nome} />
+        <EnviarRedcapButton
+          pacienteId={paciente.id}
+          pacienteNome={paciente.nome}
+          habilitado={paciente.redcap_export_habilitado}
+        />
       </div>
 
       <div className="pt-4 border-t border-hairline">

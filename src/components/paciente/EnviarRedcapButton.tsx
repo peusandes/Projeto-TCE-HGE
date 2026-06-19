@@ -23,9 +23,16 @@ import { errMsg } from "@/lib/utils";
 type Props = {
   pacienteId: string;
   pacienteNome: string;
+  habilitado: boolean;
 };
 
-export function EnviarRedcapButton({ pacienteId, pacienteNome }: Props) {
+const EVENTO_LABEL: Record<string, string> = {
+  admisso_arm_1: "Admissão",
+  seguimento_arm_1: "Seguimento",
+  alta_arm_1: "Alta",
+};
+
+export function EnviarRedcapButton({ pacienteId, pacienteNome, habilitado }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<PreviewExport | null>(null);
@@ -54,6 +61,20 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome }: Props) {
   }, [open, pacienteId]);
 
   const podeEnviar = Boolean(preview && preview.configurado && !preview.semDados && !enviando);
+
+  if (!habilitado) {
+    return (
+      <div className="rounded-md border border-hairline bg-paper-deep/40 p-3 text-[12px] text-ash">
+        <p className="flex items-center gap-1.5 text-graphite">
+          <Upload className="h-3.5 w-3.5" /> Exportação para o REDCap indisponível
+        </p>
+        <p className="mt-1">
+          Este paciente não está habilitado — o envio cobre só novas admissões; os legados
+          ficam intocados no REDCap.
+        </p>
+      </div>
+    );
+  }
 
   function handleEnviar() {
     startEnvio(async () => {
@@ -95,9 +116,9 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome }: Props) {
               <p className="text-ink font-medium">O que acontece ao confirmar:</p>
               <ul className="space-y-1 list-disc pl-4">
                 <li>Envia <strong className="text-ink">só este paciente</strong> — nenhum outro é tocado.</li>
-                <li>Se ele ainda não existe no REDCap, é <strong className="text-ink">criado</strong>; se já existe, é <strong className="text-ink">atualizado</strong>.</li>
+                <li>O <strong className="text-ink">record_id</strong> no REDCap é o <strong className="text-ink">nome</strong>. Se o nome ainda não existe lá, é criado; se já existir (legado), o envio é <strong className="text-ink">bloqueado</strong> pra não sobrescrever.</li>
                 <li><strong className="text-ink">Nunca apaga</strong> o que já está no REDCap — só preenche/atualiza os campos que temos aqui.</li>
-                <li>Cada dia de seguimento vira uma instância; instrumentos marcados como completos aqui ficam completos lá.</li>
+                <li>Cada dia de seguimento vira uma instância; cada instrumento vai pro seu evento (admissão/seguimento/alta).</li>
                 <li>Correções como desmarcar caixinhas ou esvaziar um campo precisam ser feitas direto no REDCap.</li>
               </ul>
             </div>
@@ -116,9 +137,9 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome }: Props) {
                   <div className="rounded-md border border-hairline bg-paper-deep/40 p-3 space-y-1.5">
                     <p>
                       {preview.criando ? (
-                        <span className="text-cobalt font-medium">➕ Vai criar o paciente no REDCap (novo record).</span>
+                        <span className="text-cobalt font-medium">➕ Vai criar o registro &ldquo;{preview.recordId}&rdquo; no REDCap.</span>
                       ) : (
-                        <span className="text-moss font-medium">↻ Vai atualizar o record #{preview.recordIdAtual}.</span>
+                        <span className="text-moss font-medium">↻ Vai atualizar o registro &ldquo;{preview.recordIdAtual}&rdquo;.</span>
                       )}
                     </p>
                     <p className="text-graphite">
@@ -126,7 +147,17 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome }: Props) {
                       {preview.totalSeguimentos > 0 && ` · ${preview.totalSeguimentos} seguimento(s)`} ·{" "}
                       {preview.totalCampos} campo(s) preenchido(s).
                     </p>
-                    <p className="text-[12px] text-ash">{preview.instrumentos.join(", ")}</p>
+                    {preview.eventos.length > 0 && (
+                      <p className="text-[12px] text-ash">
+                        Eventos: {preview.eventos.map((e) => EVENTO_LABEL[e] ?? e).join(", ")}
+                      </p>
+                    )}
+                    {preview.criando && (
+                      <p className="text-[11px] text-ash">
+                        Se já existir um registro com esse nome no REDCap, o envio é bloqueado
+                        automaticamente (não sobrescreve).
+                      </p>
+                    )}
                   </div>
                 )}
 

@@ -34,6 +34,7 @@ export type Paciente = {
   leito: string | null;
   situacao: Situacao;
   redcap_id: string | null;
+  redcap_export_habilitado: boolean;
   tcle_status: TcleStatus;
   descricao: string | null;
   comentarios: string | null;
