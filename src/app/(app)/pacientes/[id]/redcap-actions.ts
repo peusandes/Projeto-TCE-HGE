@@ -9,7 +9,7 @@ import {
 } from "@/lib/redcap-export/transform";
 import {
   importarRegistros,
-  recordExiste,
+  recordExisteCanon,
   getProjectInfo,
   redcapConfigurado,
 } from "@/lib/redcap-export/client";
@@ -131,7 +131,8 @@ async function setStatus(
 /**
  * Reserva atômica da criação: grava redcap_id (=nome) e marca ENVIANDO só se o
  * paciente ainda não tem redcap_id. false = já reservado por outra requisição.
- * O índice único parcial de redcap_id barra dois pacientes com o mesmo nome.
+ * O índice único CANÔNICO de redcap_id (migration 0031) barra, de forma atômica
+ * e à prova de corrida, dois pacientes com nome equivalente (mesmo acento/caixa).
  */
 async function claimCriacao(
   supabase: ReturnType<typeof createClient>,
@@ -150,7 +151,7 @@ async function claimCriacao(
     .select("id");
   if (error) {
     throw new Error(
-      `Falha ao reservar o envio — o nome "${recordId}" pode já estar vinculado a outro paciente no site: ${error.message}`,
+      `Falha ao reservar o envio — já existe outro paciente no site com nome equivalente a "${recordId}" (mesmo acento/caixa) vinculado ao REDCap. Confira se não é a mesma pessoa. (${error.message})`,
     );
   }
   return (data?.length ?? 0) > 0;
@@ -216,15 +217,16 @@ export async function enviarParaRedcap(pacienteId: string): Promise<EnvioResult>
   assertRecordIdUnico(records, recordId); // TRAVA: só este paciente
 
   if (criando) {
-    // TRAVA DE EXISTÊNCIA, re-checada a CADA tentativa não concluída: nunca
-    // sobrescrever um record alheio. Se já existe e NÃO é o que reservamos antes
-    // (pac.redcap_id != recordId), aborta. Se é nosso (claim anterior), segue
-    // pro import idempotente.
-    const jaExiste = await recordExiste(recordId);
-    const ehNosso = pac.redcap_id === recordId;
-    if (jaExiste && !ehNosso) {
+    // TRAVA DE EXISTÊNCIA CANÔNICA, re-checada a CADA tentativa não concluída:
+    // nunca sobrescrever/duplicar um record que já existe — inclusive legado com
+    // grafia divergente (acento/caixa), que o match exato deixaria passar. Se o
+    // existente NÃO for o que reservamos antes, aborta. Se é nosso (claim
+    // anterior, match exato), segue pro import idempotente.
+    const existente = await recordExisteCanon(recordId);
+    const ehNosso = existente !== null && existente === pac.redcap_id;
+    if (existente && !ehNosso) {
       throw new Error(
-        `Já existe um registro "${recordId}" no REDCap — não vou sobrescrever (pode ser legado ou homônimo). Se for o mesmo paciente, cole o record_id nele; senão ajuste o nome.`,
+        `Já existe um registro "${existente}" no REDCap equivalente a "${recordId}" — não vou sobrescrever (pode ser legado ou homônimo). Se for o mesmo paciente, cole "${existente}" no record_id dele; senão ajuste o nome.`,
       );
     }
     if (!pac.redcap_id) {

@@ -16,9 +16,9 @@ where redcap_export_habilitado = true;
 update public.pacientes p
 set redcap_export_habilitado = true
 where p.redcap_id is null
-  and p.plantao_id = (
+  and p.plantao_id in (
+    -- todos os plantões ABERTOS de hoje (não só 1, e sem os já finalizados)
     select id from public.plantoes
-    where data <= current_date
-    order by data desc, criado_em desc
-    limit 1
+    where data = current_date
+      and finalizado = false
   );

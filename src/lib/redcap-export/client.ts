@@ -1,4 +1,5 @@
 import type { RedcapRecord } from "./transform";
+import { canonNome } from "./nome";
 
 /**
  * Cliente da API REST do REDCap — import + checagens read-only.
@@ -86,6 +87,41 @@ export async function recordExiste(recordId: string): Promise<boolean> {
     throw new Error(`Resposta inesperada do REDCap (existência): ${text.slice(0, 200)}`);
   }
   return Array.isArray(json) && json.length > 0;
+}
+
+/**
+ * Procura no REDCap um record cujo id seja IGUAL (exato vence) ou canonicamente
+ * equivalente (sem acento/caixa) a recordId. Devolve o record_id REAL encontrado
+ * ou null. Pega legado/homônimo com grafia divergente ("José" vs "Jose"), que o
+ * match exato deixaria escapar e duplicaria. Read-only; exporta só o campo
+ * record_id de todos os records (sem outros dados de paciente).
+ */
+export async function recordExisteCanon(recordId: string): Promise<string | null> {
+  const { status, text } = await postForm({
+    content: "record",
+    action: "export",
+    type: "flat",
+    "fields[0]": "record_id",
+  });
+  if (status < 200 || status >= 300) {
+    throw new Error(`REDCap (listar record_ids) falhou (${status}): ${text.slice(0, 300)}`);
+  }
+  let rows: unknown;
+  try {
+    rows = JSON.parse(text);
+  } catch {
+    throw new Error(`Resposta inesperada do REDCap (record_ids): ${text.slice(0, 200)}`);
+  }
+  if (!Array.isArray(rows)) return null;
+  const alvo = canonNome(recordId);
+  let canonMatch: string | null = null;
+  for (const r of rows as Array<Record<string, unknown>>) {
+    const id = typeof r.record_id === "string" ? r.record_id : null;
+    if (!id) continue;
+    if (id === recordId) return recordId; // match exato vence
+    if (canonNome(id) === alvo) canonMatch = id;
+  }
+  return canonMatch;
 }
 
 export type ImportResult = { count: number };
