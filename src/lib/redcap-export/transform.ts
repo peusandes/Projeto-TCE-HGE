@@ -23,9 +23,13 @@
  *  - Instrumentos repetíveis (seguimento) viram linhas próprias com
  *    redcap_repeat_instrument + redcap_repeat_instance = seq; instâncias sem
  *    nenhum dado real são puladas.
+ *  - LONGITUDINAL: o projeto tem eventos; cada instrumento é mapeado a um evento
+ *    (FORM_EVENT). Instrumentos do MESMO evento são fundidos numa linha daquele
+ *    evento; o seguimento (repetível) vira N linhas no evento dele. Toda linha
+ *    carrega redcap_event_name. Instrumento sem evento mapeado aborta o envio.
  */
 
-import { ALL_INSTRUMENTS } from "@/lib/redcap-schema/instruments";
+import { ALL_INSTRUMENTS, FORM_EVENT, EVENT_ORDER } from "@/lib/redcap-schema/instruments";
 
 export type ColetaParaExport = {
   tipo: string;
@@ -87,15 +91,14 @@ function preencher(rec: RedcapRecord, c: ColetaParaExport): boolean {
 }
 
 /**
- * Gera os registros REDCap pra um paciente. Instrumentos únicos são fundidos
- * num registro base; cada instância de instrumento repetível vira uma linha
- * (instâncias vazias são puladas). `eventName` só é usado se o projeto for
- * longitudinal (definido na conexão).
+ * Gera os registros REDCap pra um paciente (projeto LONGITUDINAL). Instrumentos
+ * do mesmo evento são fundidos numa linha daquele evento; cada instância de
+ * seguimento vira uma linha no evento do seguimento (instâncias vazias e eventos
+ * sem dado são pulados). Toda linha carrega redcap_event_name (FORM_EVENT).
  */
 export function coletasParaRegistros(
   recordId: string,
   coletas: ColetaParaExport[],
-  opts: { eventName?: string } = {},
 ): RedcapRecord[] {
   // Trava: instrumento NÃO-repetível não pode ter instâncias duplicadas (fusão
   // ambígua, last-write-wins não-determinístico) — aborta antes de enviar lixo.
@@ -113,25 +116,55 @@ export function coletasParaRegistros(
   // Ordem determinística (tipo, seq) — evita fusão arbitrária.
   const ordenadas = [...coletas].sort((a, b) => a.tipo.localeCompare(b.tipo) || a.seq - b.seq);
 
-  const base: RedcapRecord = { [RECORD_ID_FIELD]: recordId };
-  if (opts.eventName) base.redcap_event_name = opts.eventName;
+  const porEvento = new Map<string, RedcapRecord>(); // evento → linha (não-repetível)
   const repetidos: RedcapRecord[] = [];
 
   for (const c of ordenadas) {
+    const evento = FORM_EVENT[c.tipo as keyof typeof FORM_EVENT];
+    if (!evento) {
+      throw new Error(
+        `Instrumento "${c.tipo}" não tem evento mapeado no REDCap (FORM_EVENT). Envio abortado.`,
+      );
+    }
     if (REPETIVEIS.has(c.tipo)) {
       const rec: RedcapRecord = {
         [RECORD_ID_FIELD]: recordId,
+        redcap_event_name: evento,
         redcap_repeat_instrument: c.tipo,
         redcap_repeat_instance: String(c.seq),
       };
-      if (opts.eventName) rec.redcap_event_name = opts.eventName;
       if (preencher(rec, c)) repetidos.push(rec); // pula instância sem dado
     } else {
-      preencher(base, c);
+      let rec = porEvento.get(evento);
+      if (!rec) {
+        rec = { [RECORD_ID_FIELD]: recordId, redcap_event_name: evento };
+        porEvento.set(evento, rec);
+      }
+      preencher(rec, c);
     }
   }
 
-  return [base, ...repetidos];
+  // Só eventos que de fato ganharam dado (além dos campos de controle).
+  const ctrl = new Set([
+    RECORD_ID_FIELD,
+    "redcap_event_name",
+    "redcap_repeat_instrument",
+    "redcap_repeat_instance",
+  ]);
+  const eventIndex = (ev: string) => {
+    const i = EVENT_ORDER.indexOf(ev);
+    return i === -1 ? EVENT_ORDER.length : i;
+  };
+  const bases = [...porEvento.entries()]
+    .sort((a, b) => eventIndex(a[0]) - eventIndex(b[0]))
+    .map(([, rec]) => rec)
+    .filter((rec) => Object.keys(rec).some((k) => !ctrl.has(k)));
+
+  repetidos.sort(
+    (a, b) => Number(a.redcap_repeat_instance) - Number(b.redcap_repeat_instance),
+  );
+
+  return [...bases, ...repetidos];
 }
 
 /**

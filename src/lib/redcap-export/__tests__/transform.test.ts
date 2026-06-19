@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { coletasParaRegistros, assertRecordIdUnico, type ColetaParaExport } from "../transform";
 
 describe("coletasParaRegistros", () => {
-  it("funde instrumentos únicos no registro base + 1 linha por seguimento", () => {
+  it("funde instrumentos do mesmo evento + 1 linha por seguimento (com evento)", () => {
     const coletas: ColetaParaExport[] = [
       { tipo: "dados_demograficos", seq: 1, status: "COMPLETE", dados: { nome_ligante: "Ana", sexo: 0 } },
       { tipo: "seguimento", seq: 1, status: "INCOMPLETE", dados: { data_seg: "2026-05-12", hemoglobina_seg: "15.2" } },
@@ -10,9 +10,10 @@ describe("coletasParaRegistros", () => {
     ];
     const recs = coletasParaRegistros("42", coletas);
 
-    expect(recs).toHaveLength(3); // base + 2 seguimentos
+    expect(recs).toHaveLength(3); // admissão + 2 seguimentos
     const base = recs[0];
     expect(base.record_id).toBe("42");
+    expect(base.redcap_event_name).toBe("admisso_arm_1");
     expect(base.nome_ligante).toBe("Ana");
     expect(base.sexo).toBe("0");
     expect(base.dados_demograficos_complete).toBe("2");
@@ -20,6 +21,7 @@ describe("coletasParaRegistros", () => {
 
     const seg1 = recs[1];
     expect(seg1.record_id).toBe("42");
+    expect(seg1.redcap_event_name).toBe("seguimento_arm_1");
     expect(seg1.redcap_repeat_instrument).toBe("seguimento");
     expect(seg1.redcap_repeat_instance).toBe("1");
     expect(seg1.hemoglobina_seg).toBe("15.2");
@@ -27,6 +29,32 @@ describe("coletasParaRegistros", () => {
 
     expect(recs[2].redcap_repeat_instance).toBe("2");
     expect(recs[2].plaquetas_seg).toBe("193");
+  });
+
+  it("agrupa por evento: admissão e alta viram 2 linhas distintas, em ordem", () => {
+    const recs = coletasParaRegistros("1", [
+      { tipo: "alta", seq: 1, status: "COMPLETE", dados: { hemacias_alta: "3.0" } },
+      { tipo: "dados_demograficos", seq: 1, status: "COMPLETE", dados: { sexo: 0 } },
+    ]);
+    expect(recs).toHaveLength(2);
+    expect(recs[0].redcap_event_name).toBe("admisso_arm_1"); // EVENT_ORDER: admissão antes de alta
+    expect(recs[0].sexo).toBe("0");
+    expect(recs[1].redcap_event_name).toBe("alta_arm_1");
+    expect(recs[1].hemacias_alta).toBe("3.0");
+  });
+
+  it("cada instrumento vai pro seu evento (FORM_EVENT)", () => {
+    const recs = coletasParaRegistros("1", [
+      { tipo: "dados_demograficos", seq: 1, status: "COMPLETE", dados: { sexo: 0 } },
+      { tipo: "seguimento", seq: 1, status: "INCOMPLETE", dados: { data_seg: "2026-05-12" } },
+      { tipo: "alta", seq: 1, status: "COMPLETE", dados: { hemacias_alta: "3.0" } },
+    ]);
+    const bases = recs.filter((r) => !r.redcap_repeat_instrument);
+    const byEvent = Object.fromEntries(bases.map((r) => [r.redcap_event_name, r]));
+    expect(byEvent["admisso_arm_1"].sexo).toBe("0");
+    expect(byEvent["alta_arm_1"].hemacias_alta).toBe("3.0");
+    const seg = recs.find((r) => r.redcap_repeat_instrument === "seguimento");
+    expect(seg?.redcap_event_name).toBe("seguimento_arm_1");
   });
 
   it("expande checkbox (array) em campo___valor = 1", () => {
@@ -55,12 +83,12 @@ describe("coletasParaRegistros", () => {
 
   it("_complete só quando COMPLETE e com dado (nunca rebaixa nem marca vazio)", () => {
     const mk = (status: string, dados: Record<string, unknown>) =>
-      coletasParaRegistros("1", [{ tipo: "alta", seq: 1, status, dados }])[0].alta_complete;
-    expect(mk("COMPLETE", { hemacias_alta: "3.0" })).toBe("2");
-    expect(mk("INCOMPLETE", { hemacias_alta: "3.0" })).toBeUndefined();
-    expect(mk("UNVERIFIED", { hemacias_alta: "3.0" })).toBeUndefined();
-    // COMPLETE mas sem dado real → não marca (evita marcar instrumento vazio)
-    expect(mk("COMPLETE", {})).toBeUndefined();
+      coletasParaRegistros("1", [{ tipo: "alta", seq: 1, status, dados }]);
+    expect(mk("COMPLETE", { hemacias_alta: "3.0" })[0]?.alta_complete).toBe("2");
+    expect(mk("INCOMPLETE", { hemacias_alta: "3.0" })[0]?.alta_complete).toBeUndefined();
+    expect(mk("UNVERIFIED", { hemacias_alta: "3.0" })[0]?.alta_complete).toBeUndefined();
+    // COMPLETE mas sem dado real → evento sem dado é descartado (array vazio)
+    expect(mk("COMPLETE", {})).toHaveLength(0);
   });
 
   it("pula instância de seguimento sem nenhum dado real", () => {
@@ -69,7 +97,7 @@ describe("coletasParaRegistros", () => {
       { tipo: "seguimento", seq: 1, status: "INCOMPLETE", dados: {} }, // vazia → some
       { tipo: "seguimento", seq: 2, status: "INCOMPLETE", dados: { hemoglobina_seg: "9.2" } },
     ]);
-    // base + só o seguimento 2 (o 1 vazio foi pulado)
+    // admissão + só o seguimento 2 (o 1 vazio foi pulado)
     expect(recs).toHaveLength(2);
     expect(recs[1].redcap_repeat_instance).toBe("2");
   });
@@ -81,6 +109,14 @@ describe("coletasParaRegistros", () => {
         { tipo: "alta", seq: 2, status: "COMPLETE", dados: { hemacias_alta: "4.0" } },
       ]),
     ).toThrow(/duplicad/i);
+  });
+
+  it("aborta instrumento sem evento mapeado", () => {
+    expect(() =>
+      coletasParaRegistros("1", [
+        { tipo: "instrumento_inexistente", seq: 1, status: "COMPLETE", dados: { x: "1" } },
+      ]),
+    ).toThrow(/evento mapeado/i);
   });
 
   it("descarta valores inválidos (NaN, boolean, objeto)", () => {
@@ -96,14 +132,6 @@ describe("coletasParaRegistros", () => {
     expect(recs[0].ruimNaN).toBeUndefined();
     expect(recs[0].ruimBool).toBeUndefined();
     expect(recs[0].ruimObj).toBeUndefined();
-  });
-
-  it("longitudinal: inclui redcap_event_name quando passado", () => {
-    const recs = coletasParaRegistros("1", [
-      { tipo: "seguimento", seq: 1, status: "INCOMPLETE", dados: { data_seg: "2026-05-12" } },
-    ], { eventName: "evento_unico_arm_1" });
-    expect(recs[0].redcap_event_name).toBe("evento_unico_arm_1");
-    expect(recs[1].redcap_event_name).toBe("evento_unico_arm_1");
   });
 
   it("exclui campos CALC (REDCap recalcula) e record_id vindo no dados", () => {

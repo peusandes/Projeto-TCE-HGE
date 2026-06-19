@@ -52,6 +52,26 @@ export const INSTRUMENT_ORDER: InstrumentId[] = [
   "gose_180d",
 ];
 
+// Projeto TCE 3.0 é LONGITUDINAL (1 arm, 3 eventos). Cada instrumento (form)
+// pertence a um evento — todo registro enviado precisa do redcap_event_name certo.
+// Espelha o formEventMapping do projeto, verificado via API em 2026-06-19.
+export const FORM_EVENT: Record<InstrumentId, string> = {
+  status_de_admisso: "admisso_arm_1",
+  dados_demograficos: "admisso_arm_1",
+  historia_pregressa: "admisso_arm_1",
+  historia_admissao: "admisso_arm_1",
+  neuroimagem_admissao: "admisso_arm_1",
+  seguimento: "seguimento_arm_1",
+  dados_de_cirurgia: "alta_arm_1",
+  alta: "alta_arm_1",
+  gose_30d: "alta_arm_1",
+  gose_90d: "alta_arm_1",
+  gose_180d: "alta_arm_1",
+};
+
+// Ordem determinística dos eventos na saída do export.
+export const EVENT_ORDER: string[] = ["admisso_arm_1", "seguimento_arm_1", "alta_arm_1"];
+
 export const INSTRUMENT_TITLE: Record<InstrumentId, string> = {
   status_de_admisso: "Status de admissão",
   dados_demograficos: "Dados demográficos",

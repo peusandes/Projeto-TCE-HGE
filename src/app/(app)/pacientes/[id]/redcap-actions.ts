@@ -154,7 +154,7 @@ export async function enviarParaRedcap(pacienteId: string): Promise<EnvioResult>
   }
 
   const recordId = pac.redcap_id ?? pacienteId;
-  const records = coletasParaRegistros(recordId, coletas, { eventName: EVENT_NAME });
+  const records = coletasParaRegistros(recordId, coletas);
   assertRecordIdUnico(records, recordId); // TRAVA: só este paciente
 
   if (criando) {
