@@ -1,12 +1,15 @@
 import type { RedcapRecord } from "./transform";
 
 /**
- * Cliente da API REST do REDCap — só o método de IMPORT de registros.
+ * Cliente da API REST do REDCap — import + checagens read-only.
  * Token e URL ficam em env (server-only): REDCAP_API_URL, REDCAP_API_TOKEN.
  *
  * SEGURANÇA:
  *  - overwriteBehavior=normal → só preenche o que enviamos; NUNCA apaga campos
  *    já existentes no REDCap.
+ *  - O record_id deste projeto é o NOME do paciente (sem auto-numeração). Criar =
+ *    importar com record_id=nome. `recordExiste` permite barrar a criação quando
+ *    o nome já existe (legado/homônimo), pra nunca sobrescrever.
  *  - O import só afeta os record_id presentes em `records` (garantido por
  *    assertRecordIdUnico antes de chamar aqui).
  */
@@ -26,40 +29,27 @@ function config(): { url: string; token: string } {
   return { url, token };
 }
 
-/** Tenta extrair o record_id atribuído pela auto-numeração do REDCap. */
-function parseAutoId(json: unknown): string | undefined {
-  // returnContent=auto_ids costuma vir como ["enviado,atribuido", ...].
-  if (Array.isArray(json) && json.length > 0) {
-    const first = json[0];
-    if (typeof first === "string") {
-      const partes = first.split(",");
-      return (partes[1] ?? partes[0])?.trim() || undefined;
-    }
-    if (first && typeof first === "object") {
-      const o = first as Record<string, unknown>;
-      const v = o.record_id ?? o.id ?? Object.values(o)[0];
-      return v != null ? String(v) : undefined;
-    }
-  }
-  return undefined;
-}
-
-/**
- * Lê a configuração do projeto REDCap. Usado como TRAVA antes de criar paciente:
- *  - autonumber: se false, NÃO podemos mandar forceAutoNumber (risco de colidir
- *    com um record real). Bloqueamos a criação automática.
- *  - longitudinal: se true, todo registro precisa de redcap_event_name.
- */
-export async function getProjectInfo(): Promise<{ autonumber: boolean; longitudinal: boolean }> {
+async function postForm(fields: Record<string, string>): Promise<{ status: number; text: string }> {
   const { url, token } = config();
-  const body = new URLSearchParams({ token, content: "project", format: "json", returnFormat: "json" });
+  const body = new URLSearchParams({ token, format: "json", returnFormat: "json", ...fields });
   const res = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body,
   });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`REDCap (project info) falhou (${res.status}): ${text.slice(0, 300)}`);
+  return { status: res.status, text: await res.text() };
+}
+
+/**
+ * Lê a configuração do projeto REDCap. Usado como TRAVA defensiva: este fluxo
+ * assume record_id = nome (auto-numeração DESLIGADA). Se autonumber estiver
+ * ligado, a action aborta.
+ */
+export async function getProjectInfo(): Promise<{ autonumber: boolean; longitudinal: boolean }> {
+  const { status, text } = await postForm({ content: "project" });
+  if (status < 200 || status >= 300) {
+    throw new Error(`REDCap (project info) falhou (${status}): ${text.slice(0, 300)}`);
+  }
   let j: Record<string, unknown>;
   try {
     j = JSON.parse(text) as Record<string, unknown>;
@@ -73,49 +63,54 @@ export async function getProjectInfo(): Promise<{ autonumber: boolean; longitudi
   };
 }
 
-export type ImportResult = { count: number; novoRecordId?: string };
+/**
+ * Confere se um record (por nome) JÁ EXISTE no REDCap. Read-only — exporta só o
+ * campo record_id daquele id. Usado pra NUNCA sobrescrever um registro existente
+ * (legado/homônimo) ao criar. Requer permissão de Export no token.
+ */
+export async function recordExiste(recordId: string): Promise<boolean> {
+  const { status, text } = await postForm({
+    content: "record",
+    action: "export",
+    type: "flat",
+    "records[0]": recordId,
+    "fields[0]": "record_id",
+  });
+  if (status < 200 || status >= 300) {
+    throw new Error(`REDCap (checar existência) falhou (${status}): ${text.slice(0, 300)}`);
+  }
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`Resposta inesperada do REDCap (existência): ${text.slice(0, 200)}`);
+  }
+  return Array.isArray(json) && json.length > 0;
+}
+
+export type ImportResult = { count: number };
 
 /**
- * Importa registros pro REDCap. Com forceAutoNumber=true (paciente novo), o
- * REDCap ignora o record_id enviado, atribui um novo e o retornamos.
+ * Importa registros pro REDCap (overwriteBehavior=normal — nunca apaga).
+ * SEM auto-numeração: o record_id enviado (o nome) é o id usado/criado.
  */
-export async function importarRegistros(
-  records: RedcapRecord[],
-  opts: { forceAutoNumber?: boolean } = {},
-): Promise<ImportResult> {
-  const { url, token } = config();
-
-  const body = new URLSearchParams({
-    token,
+export async function importarRegistros(records: RedcapRecord[]): Promise<ImportResult> {
+  const { status, text } = await postForm({
     content: "record",
     action: "import",
-    format: "json",
     type: "flat",
     overwriteBehavior: "normal",
-    returnContent: opts.forceAutoNumber ? "auto_ids" : "count",
+    returnContent: "count",
     data: JSON.stringify(records),
   });
-  if (opts.forceAutoNumber) body.set("forceAutoNumber", "true");
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body,
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`REDCap recusou a importação (${res.status}): ${text.slice(0, 500)}`);
+  if (status < 200 || status >= 300) {
+    throw new Error(`REDCap recusou a importação (${status}): ${text.slice(0, 500)}`);
   }
-
   let json: unknown;
   try {
     json = JSON.parse(text);
   } catch {
     throw new Error(`Resposta inesperada do REDCap: ${text.slice(0, 300)}`);
-  }
-
-  if (opts.forceAutoNumber) {
-    return { count: 1, novoRecordId: parseAutoId(json) };
   }
   const count = (json as { count?: number })?.count;
   return { count: typeof count === "number" ? count : 0 };
