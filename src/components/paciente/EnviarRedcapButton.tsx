@@ -60,7 +60,9 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome, habilitado }: Pro
     };
   }, [open, pacienteId]);
 
-  const podeEnviar = Boolean(preview && preview.configurado && !preview.semDados && !enviando);
+  const podeEnviar = Boolean(
+    preview && preview.configurado && !preview.semDados && !preview.semNome && !enviando,
+  );
 
   if (!habilitado) {
     return (
@@ -133,6 +135,11 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome, habilitado }: Pro
               <>
                 {preview.semDados ? (
                   <p className="text-vermillion">Este paciente ainda não tem coletas pra enviar.</p>
+                ) : preview.semNome ? (
+                  <p className="text-vermillion">
+                    Paciente sem nome — no REDCap o record_id é o nome completo. Preencha o nome
+                    antes de exportar.
+                  </p>
                 ) : (
                   <div className="rounded-md border border-hairline bg-paper-deep/40 p-3 space-y-1.5">
                     <p>

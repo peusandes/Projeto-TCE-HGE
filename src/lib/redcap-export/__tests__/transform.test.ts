@@ -57,6 +57,28 @@ describe("coletasParaRegistros", () => {
     expect(seg?.redcap_event_name).toBe("seguimento_arm_1");
   });
 
+  it("funde dois instrumentos do MESMO evento numa linha só", () => {
+    const recs = coletasParaRegistros("1", [
+      { tipo: "status_de_admisso", seq: 1, status: "COMPLETE", dados: { tcle: 1 } },
+      { tipo: "dados_demograficos", seq: 1, status: "COMPLETE", dados: { sexo: 0 } },
+    ]);
+    expect(recs).toHaveLength(1);
+    expect(recs[0].redcap_event_name).toBe("admisso_arm_1");
+    expect(recs[0].tcle).toBe("1");
+    expect(recs[0].sexo).toBe("0");
+    expect(recs[0].status_de_admisso_complete).toBe("2");
+    expect(recs[0].dados_demograficos_complete).toBe("2");
+  });
+
+  it("aborta colisão de campo entre instrumentos do mesmo evento", () => {
+    expect(() =>
+      coletasParaRegistros("1", [
+        { tipo: "status_de_admisso", seq: 1, status: "INCOMPLETE", dados: { campo_x: "a" } },
+        { tipo: "dados_demograficos", seq: 1, status: "INCOMPLETE", dados: { campo_x: "b" } },
+      ]),
+    ).toThrow(/Conflito de campo/i);
+  });
+
   it("expande checkbox (array) em campo___valor = 1", () => {
     const recs = coletasParaRegistros("7", [
       { tipo: "historia_admissao", seq: 1, status: "COMPLETE", dados: { mecanismo_trauma: [2, 5] } },

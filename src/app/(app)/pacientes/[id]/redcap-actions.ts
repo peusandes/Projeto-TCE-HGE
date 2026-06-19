@@ -13,6 +13,7 @@ import {
   getProjectInfo,
   redcapConfigurado,
 } from "@/lib/redcap-export/client";
+import { normalizeNome, canonNome } from "@/lib/redcap-export/nome";
 
 /**
  * Exportação de UM paciente pro REDCap (Projeto TCE 3.0 — longitudinal,
@@ -29,16 +30,11 @@ import {
  * Roda como o usuário logado → o trigger de auditoria registra quem exportou.
  */
 
-/** O record_id no REDCap é o nome — normaliza espaços pra casar de forma estável. */
-function normalizeNome(nome: string): string {
-  return nome.trim().replace(/\s+/g, " ");
-}
-
 async function carregar(pacienteId: string) {
   const supabase = createClient();
   const { data: pac, error: pErr } = await supabase
     .from("pacientes")
-    .select("id, nome, redcap_id, redcap_export_habilitado")
+    .select("id, nome, redcap_id, redcap_export_habilitado, redcap_exportado_em")
     .eq("id", pacienteId)
     .single();
   if (pErr || !pac) throw new Error("Paciente não encontrado.");
@@ -73,6 +69,7 @@ export type PreviewExport = {
   instrumentos: string[];
   eventos: string[];
   semDados: boolean;
+  semNome: boolean;
 };
 
 const CTRL = new Set([
@@ -85,8 +82,15 @@ const CTRL = new Set([
 /** Monta o que SERIA enviado, sem enviar nada (dry-run / prévia). Offline-safe. */
 export async function previewExportRedcap(pacienteId: string): Promise<PreviewExport> {
   const { pac, coletas } = await carregar(pacienteId);
-  const criando = !pac.redcap_id;
-  const recordId = pac.redcap_id ?? normalizeNome(pac.nome);
+  // Espelha o gate do envio: a prévia não deve montar nada pra paciente não
+  // habilitado (defesa em profundidade — a UI já esconde o botão).
+  if (!pac.redcap_export_habilitado) {
+    throw new Error("Este paciente não está habilitado para exportação ao REDCap.");
+  }
+  // "criando" = primeiro envio ainda não concluído (verdade: redcap_exportado_em).
+  const criando = !pac.redcap_exportado_em;
+  const nome = normalizeNome(pac.nome);
+  const recordId = pac.redcap_id ?? nome;
   const records = coletasParaRegistros(recordId, coletas);
   assertRecordIdUnico(records, recordId);
 
@@ -112,6 +116,7 @@ export async function previewExportRedcap(pacienteId: string): Promise<PreviewEx
     instrumentos,
     eventos,
     semDados: coletas.length === 0,
+    semNome: criando && !nome,
   };
 }
 
@@ -174,8 +179,12 @@ export async function enviarParaRedcap(pacienteId: string): Promise<EnvioResult>
     );
   }
 
-  const criando = !pac.redcap_id;
+  // "criando" = primeiro envio ainda não concluído (verdade: redcap_exportado_em).
+  // Derivar de redcap_id deixaria a trava de existência ser pulada pra sempre
+  // após um claim seguido de falha de import (I6-01).
+  const criando = !pac.redcap_exportado_em;
   const recordId = pac.redcap_id ?? nome;
+  const primeiraCriacao = criando && !pac.redcap_id; // ainda não reservamos o nome
 
   // Defensivo: o fluxo assume record_id=nome (auto-numeração DESLIGADA).
   const proj = await getProjectInfo();
@@ -185,21 +194,46 @@ export async function enviarParaRedcap(pacienteId: string): Promise<EnvioResult>
     );
   }
 
+  // I3: a MESMA pessoa com grafia divergente (caixa/acento) viraria 2 records.
+  // Antes de reservar um nome novo, barra se já há paciente exportado equivalente.
+  if (primeiraCriacao) {
+    const canon = canonNome(nome);
+    const { data: outros, error: oErr } = await supabase
+      .from("pacientes")
+      .select("nome, redcap_id")
+      .not("redcap_id", "is", null)
+      .neq("id", pacienteId);
+    if (oErr) throw new Error(`Erro checando duplicidade de nome: ${oErr.message}`);
+    const colisao = (outros ?? []).find((o) => canonNome(o.nome as string) === canon);
+    if (colisao) {
+      throw new Error(
+        `Já existe um paciente exportado com nome equivalente ("${colisao.nome}", record "${colisao.redcap_id}"). Confirme se é a mesma pessoa antes de exportar — pra não duplicar no REDCap.`,
+      );
+    }
+  }
+
   const records = coletasParaRegistros(recordId, coletas);
   assertRecordIdUnico(records, recordId); // TRAVA: só este paciente
 
   if (criando) {
-    // TRAVA DE EXISTÊNCIA: nunca sobrescrever um record que já existe.
-    if (await recordExiste(recordId)) {
+    // TRAVA DE EXISTÊNCIA, re-checada a CADA tentativa não concluída: nunca
+    // sobrescrever um record alheio. Se já existe e NÃO é o que reservamos antes
+    // (pac.redcap_id != recordId), aborta. Se é nosso (claim anterior), segue
+    // pro import idempotente.
+    const jaExiste = await recordExiste(recordId);
+    const ehNosso = pac.redcap_id === recordId;
+    if (jaExiste && !ehNosso) {
       throw new Error(
         `Já existe um registro "${recordId}" no REDCap — não vou sobrescrever (pode ser legado ou homônimo). Se for o mesmo paciente, cole o record_id nele; senão ajuste o nome.`,
       );
     }
-    const reservou = await claimCriacao(supabase, pacienteId, recordId);
-    if (!reservou) {
-      throw new Error(
-        "Já há um envio em andamento pra este paciente (ou ele acabou de ser vinculado). Aguarde alguns segundos e tente de novo.",
-      );
+    if (!pac.redcap_id) {
+      const reservou = await claimCriacao(supabase, pacienteId, recordId);
+      if (!reservou) {
+        throw new Error(
+          "Já há um envio em andamento pra este paciente (ou ele acabou de ser vinculado). Aguarde alguns segundos e tente de novo.",
+        );
+      }
     }
   }
 

@@ -140,7 +140,20 @@ export function coletasParaRegistros(
         rec = { [RECORD_ID_FIELD]: recordId, redcap_event_name: evento };
         porEvento.set(evento, rec);
       }
-      preencher(rec, c);
+      // Funde os campos deste instrumento na linha do evento. Trava defensiva:
+      // dois instrumentos do mesmo evento NÃO podem escrever o mesmo campo com
+      // valores diferentes (no REDCap os field_name são únicos no projeto, então
+      // isso só dispararia num bug de schema nosso — aborta em vez de mascarar).
+      const temp: RedcapRecord = {};
+      preencher(temp, c);
+      for (const [k, v] of Object.entries(temp)) {
+        if (k in rec && rec[k] !== v) {
+          throw new Error(
+            `Conflito de campo "${k}" entre instrumentos do evento ${evento} ("${rec[k]}" vs "${v}"). Envio abortado.`,
+          );
+        }
+        rec[k] = v;
+      }
     }
   }
 
