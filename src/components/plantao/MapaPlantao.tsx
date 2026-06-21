@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Plus, FileSpreadsheet, ChevronDown, Search, X, Paperclip } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, FileSpreadsheet, ChevronDown, Search, X, Paperclip, EyeOff, Eye } from "lucide-react";
 import { PacienteCard } from "./PacienteCard";
 import { NovoPacienteDrawer } from "./NovoPacienteDrawer";
 import { ExcelImportSheet } from "./ExcelImportSheet";
@@ -55,12 +55,37 @@ export function MapaPlantao({
   /** Quando setado, só renderiza pacientes com paciente_id nesse Set. */
   const [filterIds, setFilterIds] = useState<Set<string> | null>(null);
   const [query, setQuery] = useState("");
+  /** Esconde da VISÃO os pacientes excluídos (não apaga nada; preferência fica
+   *  salva no aparelho). Inicia false e ajusta no mount p/ evitar mismatch SSR. */
+  const [esconderExcluidos, setEsconderExcluidos] = useState(false);
+
+  useEffect(() => {
+    setEsconderExcluidos(localStorage.getItem("mapa:esconderExcluidos") === "1");
+  }, []);
+
+  function toggleExcluidos() {
+    setEsconderExcluidos((v) => {
+      const nv = !v;
+      try {
+        localStorage.setItem("mapa:esconderExcluidos", nv ? "1" : "0");
+      } catch {
+        /* ignora (modo privado etc.) */
+      }
+      return nv;
+    });
+  }
+
+  const totalExcluidos = useMemo(
+    () => mapa.filter((m) => m.situacao === "EXCLUSAO").length,
+    [mapa],
+  );
 
   const filteredMapa = useMemo(() => {
     const norm = (s: string) =>
       s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
     const q = query.trim();
     let base = mapa;
+    if (esconderExcluidos) base = base.filter((m) => m.situacao !== "EXCLUSAO");
     if (filterIds !== null) base = base.filter((m) => filterIds.has(m.paciente_id));
     if (q.length > 0) {
       const nq = norm(q);
@@ -73,7 +98,7 @@ export function MapaPlantao({
       });
     }
     return base;
-  }, [mapa, filterIds, query]);
+  }, [mapa, filterIds, query, esconderExcluidos]);
 
   const grupos = useMemo(() => {
     const map = new Map<Setor, MapaItem[]>();
@@ -128,6 +153,34 @@ export function MapaPlantao({
               <X className="h-4 w-4" />
             </button>
           )}
+        </div>
+      )}
+
+      {totalExcluidos > 0 && (
+        <div className="pt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={toggleExcluidos}
+            aria-pressed={esconderExcluidos}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] min-tap transition-colors",
+              esconderExcluidos
+                ? "border-cobalt/40 bg-cobalt/[0.06] text-cobalt"
+                : "border-hairline bg-paper-deep text-graphite hover:bg-paper-soft",
+            )}
+          >
+            {esconderExcluidos ? (
+              <>
+                <Eye className="h-3.5 w-3.5" strokeWidth={1.8} />
+                Mostrar excluídos ({totalExcluidos})
+              </>
+            ) : (
+              <>
+                <EyeOff className="h-3.5 w-3.5" strokeWidth={1.8} />
+                Esconder excluídos ({totalExcluidos})
+              </>
+            )}
+          </button>
         </div>
       )}
 
