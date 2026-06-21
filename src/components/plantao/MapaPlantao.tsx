@@ -11,6 +11,7 @@ import type { ResponsavelInfo } from "./ResponsavelAvatar";
 import {
   SETORES,
   SETOR_LABEL,
+  SITUACAO_LABEL,
   type Setor,
   type Situacao,
   type TcleStatus,
@@ -58,6 +59,9 @@ export function MapaPlantao({
   /** Esconde da VISÃO os pacientes excluídos (não apaga nada; preferência fica
    *  salva no aparelho). Inicia false e ajusta no mount p/ evitar mismatch SSR. */
   const [esconderExcluidos, setEsconderExcluidos] = useState(false);
+  /** Filtro por situação (single-select): null = todos. EXCLUSAO fica de fora
+   *  (tratado pelo toggle de excluídos). */
+  const [situacaoFiltro, setSituacaoFiltro] = useState<"ADM" | "SEG" | "ALTA" | null>(null);
 
   useEffect(() => {
     setEsconderExcluidos(localStorage.getItem("mapa:esconderExcluidos") === "1");
@@ -75,16 +79,19 @@ export function MapaPlantao({
     });
   }
 
-  const totalExcluidos = useMemo(
-    () => mapa.filter((m) => m.situacao === "EXCLUSAO").length,
-    [mapa],
-  );
+  const contagens = useMemo(() => {
+    const c: Record<Situacao, number> = { ADM: 0, SEG: 0, EXCLUSAO: 0, ALTA: 0 };
+    for (const m of mapa) c[m.situacao] = (c[m.situacao] ?? 0) + 1;
+    return c;
+  }, [mapa]);
+  const totalExcluidos = contagens.EXCLUSAO;
 
   const filteredMapa = useMemo(() => {
     const norm = (s: string) =>
       s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
     const q = query.trim();
     let base = mapa;
+    if (situacaoFiltro) base = base.filter((m) => m.situacao === situacaoFiltro);
     if (esconderExcluidos) base = base.filter((m) => m.situacao !== "EXCLUSAO");
     if (filterIds !== null) base = base.filter((m) => filterIds.has(m.paciente_id));
     if (q.length > 0) {
@@ -98,7 +105,7 @@ export function MapaPlantao({
       });
     }
     return base;
-  }, [mapa, filterIds, query, esconderExcluidos]);
+  }, [mapa, filterIds, query, esconderExcluidos, situacaoFiltro]);
 
   const grupos = useMemo(() => {
     const map = new Map<Setor, MapaItem[]>();
@@ -156,31 +163,65 @@ export function MapaPlantao({
         </div>
       )}
 
-      {totalExcluidos > 0 && (
-        <div className="pt-2 flex justify-end">
+      {mapa.length > 0 && (
+        <div className="pt-2 flex flex-wrap items-center gap-1.5">
           <button
             type="button"
-            onClick={toggleExcluidos}
-            aria-pressed={esconderExcluidos}
+            onClick={() => setSituacaoFiltro(null)}
+            aria-pressed={situacaoFiltro === null}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] min-tap transition-colors",
-              esconderExcluidos
-                ? "border-cobalt/40 bg-cobalt/[0.06] text-cobalt"
+              "inline-flex items-center rounded-md border px-2.5 py-1.5 text-[12px] min-tap transition-colors",
+              situacaoFiltro === null
+                ? "border-cobalt/40 bg-cobalt/[0.08] text-cobalt font-medium"
                 : "border-hairline bg-paper-deep text-graphite hover:bg-paper-soft",
             )}
           >
-            {esconderExcluidos ? (
-              <>
-                <Eye className="h-3.5 w-3.5" strokeWidth={1.8} />
-                Mostrar excluídos ({totalExcluidos})
-              </>
-            ) : (
-              <>
-                <EyeOff className="h-3.5 w-3.5" strokeWidth={1.8} />
-                Esconder excluídos ({totalExcluidos})
-              </>
-            )}
+            Todos
           </button>
+          {(["ADM", "SEG", "ALTA"] as const)
+            .filter((s) => contagens[s] > 0)
+            .map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setSituacaoFiltro(situacaoFiltro === s ? null : s)}
+                aria-pressed={situacaoFiltro === s}
+                className={cn(
+                  "inline-flex items-center rounded-md border px-2.5 py-1.5 text-[12px] min-tap transition-colors",
+                  situacaoFiltro === s
+                    ? "border-cobalt/40 bg-cobalt/[0.08] text-cobalt font-medium"
+                    : "border-hairline bg-paper-deep text-graphite hover:bg-paper-soft",
+                )}
+              >
+                {SITUACAO_LABEL[s]} ({contagens[s]})
+              </button>
+            ))}
+
+          {situacaoFiltro === null && totalExcluidos > 0 && (
+            <button
+              type="button"
+              onClick={toggleExcluidos}
+              aria-pressed={esconderExcluidos}
+              className={cn(
+                "ml-auto inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] min-tap transition-colors",
+                esconderExcluidos
+                  ? "border-cobalt/40 bg-cobalt/[0.06] text-cobalt"
+                  : "border-hairline bg-paper-deep text-graphite hover:bg-paper-soft",
+              )}
+            >
+              {esconderExcluidos ? (
+                <>
+                  <Eye className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  Mostrar excluídos ({totalExcluidos})
+                </>
+              ) : (
+                <>
+                  <EyeOff className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  Esconder excluídos ({totalExcluidos})
+                </>
+              )}
+            </button>
+          )}
         </div>
       )}
 
