@@ -40,16 +40,37 @@ export function errMsg(err: unknown): string {
 export function debounce<T extends (...args: never[]) => void>(
   fn: T,
   wait: number,
-): T & { cancel: () => void } {
+): T & { cancel: () => void; flush: () => void } {
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let lastArgs: Parameters<T> | null = null;
   const debounced = ((...args: Parameters<T>) => {
+    lastArgs = args;
     if (timer) clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), wait);
-  }) as T & { cancel: () => void };
+    timer = setTimeout(() => {
+      timer = null;
+      const a = lastArgs;
+      lastArgs = null;
+      if (a) fn(...a);
+    }, wait);
+  }) as T & { cancel: () => void; flush: () => void };
   debounced.cancel = () => {
     if (timer) {
       clearTimeout(timer);
       timer = null;
+    }
+    lastArgs = null;
+  };
+  // Executa imediatamente a última chamada pendente (se houver). Útil pra não
+  // perder edições ao desmontar/fechar a página.
+  debounced.flush = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    if (lastArgs) {
+      const a = lastArgs;
+      lastArgs = null;
+      fn(...a);
     }
   };
   return debounced;

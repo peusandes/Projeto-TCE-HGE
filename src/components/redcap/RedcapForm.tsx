@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { CheckCircle2, CircleDashed, AlertCircle, AlertTriangle } from "lucide-react";
+import { CheckCircle2, CircleDashed, AlertCircle, AlertTriangle, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { RedcapField } from "./RedcapField";
@@ -74,31 +74,40 @@ export function RedcapForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, otherForms]);
 
-  // Save (debounced) — usa sync wrapper que enfileira se offline
+  // Núcleo do salvamento (awaitable) — sync wrapper que enfileira se offline.
+  // Salva SEMPRE o estado atual, com qualquer status (completo ou não). Em ref
+  // pra ficar estável e ler data/status do payload (evita closure velha).
+  const persistRef = useRef<(p: { data: FormData; status: FormStatus }) => Promise<boolean>>();
+  persistRef.current = async (payload) => {
+    setSaving(true);
+    try {
+      await performWithSync<UpsertColetaRedcapPayload>(
+        "upsert_coleta_redcap",
+        {
+          paciente_id: paciente.id,
+          plantao_id: paciente.plantao_id,
+          instrument: instrument.id,
+          seq,
+          data: payload.data,
+          status: payload.status,
+        },
+        { silent: true },
+      );
+      setSavedAt(new Date());
+      return true;
+    } catch (err) {
+      toast.error("Erro ao salvar", { description: errMsg(err) });
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Save debounced (auto-save ao editar). flush() roda o pendente na hora.
   const save = useRef(
-    debounce(async (payload: { data: FormData; status: FormStatus }) => {
-      setSaving(true);
-      startTransition(async () => {
-        try {
-          const op: UpsertColetaRedcapPayload = {
-            paciente_id: paciente.id,
-            plantao_id: paciente.plantao_id,
-            instrument: instrument.id,
-            seq,
-            data: payload.data,
-            status: payload.status,
-          };
-          await performWithSync<UpsertColetaRedcapPayload>(
-            "upsert_coleta_redcap",
-            op,
-            { silent: true },
-          );
-          setSavedAt(new Date());
-        } catch (err) {
-          toast.error("Erro ao salvar", { description: errMsg(err) });
-        } finally {
-          setSaving(false);
-        }
+    debounce((payload: { data: FormData; status: FormStatus }) => {
+      startTransition(() => {
+        void persistRef.current?.(payload);
       });
     }, 1500),
   ).current;
@@ -113,6 +122,22 @@ export function RedcapForm({
     save({ data: merged, status });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, calcSnapshot, status]);
+
+  // Não perder edições: grava o save pendente ao DESMONTAR (navegar no app /
+  // fechar o instrumento) e ao ESCONDER/FECHAR a aba do navegador.
+  useEffect(() => {
+    const onPageHide = () => save.flush();
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") save.flush();
+    };
+    window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", onVisibility);
+      save.flush();
+    };
+  }, [save]);
 
   const update = useCallback((name: string, value: FieldValue) => {
     setData((prev) => ({ ...prev, [name]: value }));
@@ -135,6 +160,17 @@ export function RedcapForm({
     return v !== null && v !== undefined && v !== "";
   });
   const canComplete = required.length === 0 || requiredFilled.length === required.length;
+
+  // Salvar AGORA, com qualquer status (completo ou não). Cancela o debounce
+  // pendente pra não gravar duas vezes.
+  function salvarAgora() {
+    save.cancel();
+    const merged = { ...data, ...calcSnapshot };
+    startTransition(async () => {
+      const ok = await persistRef.current?.({ data: merged, status });
+      if (ok) toast.success("Salvo");
+    });
+  }
 
   function handleMarkComplete() {
     if (!canComplete) {
@@ -224,6 +260,16 @@ export function RedcapForm({
 
       {/* Action */}
       <div className="pt-4 border-t border-hairline space-y-2">
+        <Button
+          onClick={salvarAgora}
+          disabled={saving}
+          variant="outline"
+          size="lg"
+          className="w-full"
+        >
+          <Save className="h-4 w-4 mr-2" strokeWidth={1.8} />
+          {saving ? "Salvando..." : "Salvar (mesmo incompleto)"}
+        </Button>
         <Button
           onClick={handleMarkComplete}
           disabled={!canComplete}
