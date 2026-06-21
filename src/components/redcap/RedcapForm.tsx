@@ -27,6 +27,9 @@ type Props = {
   initialData: FormData;
   initialStatus: FormStatus;
   otherForms: Record<string, FormData>;
+  /** Chamado após salvar com sucesso — o pai guarda em memória pra reabrir a
+   *  seção mostrando o dado salvo na hora (sem depender do refresh do servidor). */
+  onSaved?: (data: FormData, status: FormStatus) => void;
 };
 
 const STATUS_LABEL: Record<FormStatus, string> = {
@@ -42,6 +45,7 @@ export function RedcapForm({
   initialData,
   initialStatus,
   otherForms,
+  onSaved,
 }: Props) {
   const [data, setData] = useState<FormData>(initialData);
   const [status, setStatus] = useState<FormStatus>(initialStatus);
@@ -97,6 +101,9 @@ export function RedcapForm({
         { silent: true },
       );
       setSavedAt(new Date());
+      // Guarda no pai o que foi salvo → reabrir a seção mostra na hora (não
+      // depende do round-trip do servidor). Vale pra synced E queued.
+      onSaved?.(payload.data, payload.status);
       // Gravou no servidor: invalida o cache RSC das rotas do paciente pra que
       // reabrir/voltar NÃO mostre dados velhos (o initialData não se atualiza
       // sozinho). Fire-and-forget. (O botão Salvar ainda dá router.refresh()
@@ -130,8 +137,12 @@ export function RedcapForm({
     }
     const merged = { ...data, ...calcSnapshot };
     save({ data: merged, status });
+    // Dispara só por edição real do usuário (data/status). calcSnapshot é lido
+    // na hora, mas NÃO entra nas deps: senão a re-renderização vinda do onSaved
+    // (que muda a identidade de otherForms→calcSnapshot) re-dispararia o save
+    // em loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, calcSnapshot, status]);
+  }, [data, status]);
 
   // Não perder edições: grava o save pendente ao DESMONTAR (navegar no app /
   // fechar o instrumento) e ao ESCONDER/FECHAR a aba do navegador.

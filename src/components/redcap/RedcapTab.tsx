@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronDown,
@@ -63,27 +63,49 @@ export function RedcapTab({ paciente, coletas, initialOpenInstrument }: Props) {
   const [, startTransition] = useTransition();
   const router = useRouter();
 
+  // Override local do que cada form ACABOU de salvar (key = `${instr}#${seq}`).
+  // Garante que colapsar/reabrir uma seção mostre o dado salvo NA HORA, sem
+  // depender do round-trip do servidor (router.refresh). É a rede de segurança
+  // contra "salvei, recolhi, reabri e sumiu".
+  const [saved, setSaved] = useState<Record<string, { data: FormData; status: FormStatus }>>({});
+  const onSaved = useCallback(
+    (instrument: InstrumentId, seq: number, data: FormData, status: FormStatus) => {
+      setSaved((s) => ({ ...s, [`${instrument}#${seq}`]: { data, status } }));
+    },
+    [],
+  );
+
+  // Coletas do servidor com o override local sobreposto.
+  const mergedColetas = useMemo(
+    () =>
+      coletas.map((c) => {
+        const ov = saved[`${c.instrument}#${c.seq}`];
+        return ov ? { ...c, data: ov.data, status: ov.status } : c;
+      }),
+    [coletas, saved],
+  );
+
   // Agrupa coletas por instrumento, ordenadas por seq.
   const byInstrument = useMemo(() => {
     const map = new Map<InstrumentId, Coleta[]>();
-    for (const c of coletas) {
+    for (const c of mergedColetas) {
       const list = map.get(c.instrument) ?? [];
       list.push(c);
       map.set(c.instrument, list);
     }
     for (const list of map.values()) list.sort((a, b) => a.seq - b.seq);
     return map;
-  }, [coletas]);
+  }, [mergedColetas]);
 
   // Context cruzado: usa SEMPRE seq=1 como "principal" do outro instrumento.
   // (Suficiente pro cálculo de campos como ISS, GCS, etc.)
   const others: Record<string, FormData> = useMemo(() => {
     const o: Record<string, FormData> = {};
-    for (const c of coletas) {
+    for (const c of mergedColetas) {
       if (c.seq === 1) o[c.instrument] = c.data;
     }
     return o;
-  }, [coletas]);
+  }, [mergedColetas]);
 
   function adicionarSeguimento(instrumentId: InstrumentId) {
     setAdicionando(instrumentId);
@@ -131,6 +153,7 @@ export function RedcapTab({ paciente, coletas, initialOpenInstrument }: Props) {
                 adicionando={adicionando === inst.id}
                 paciente={paciente}
                 otherForms={others}
+                onSaved={onSaved}
               />
             );
           }
@@ -170,6 +193,7 @@ export function RedcapTab({ paciente, coletas, initialOpenInstrument }: Props) {
                     initialData={coleta?.data ?? {}}
                     initialStatus={status}
                     otherForms={others}
+                    onSaved={(d, st) => onSaved(inst.id, 1, d, st)}
                   />
                 </div>
               )}
@@ -197,6 +221,7 @@ function MultiInstanceRow({
   adicionando,
   paciente,
   otherForms,
+  onSaved,
 }: {
   instrumentId: InstrumentId;
   title: string;
@@ -207,6 +232,7 @@ function MultiInstanceRow({
   adicionando: boolean;
   paciente: { id: string; nome: string; plantao_id: string };
   otherForms: Record<string, FormData>;
+  onSaved: (instrument: InstrumentId, seq: number, data: FormData, status: FormStatus) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -292,6 +318,7 @@ function MultiInstanceRow({
                       initialData={c.data}
                       initialStatus={c.status}
                       otherForms={otherForms}
+                      onSaved={(d, st) => onSaved(instrumentId, c.seq, d, st)}
                     />
                   </div>
                 )}
