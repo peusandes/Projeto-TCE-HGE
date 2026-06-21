@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { CheckCircle2, CircleDashed, AlertCircle, AlertTriangle, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { revalidarPacienteRoutes } from "@/app/(app)/pacientes/[id]/actions";
 import { RedcapField } from "./RedcapField";
 import type {
   FieldValue,
@@ -47,6 +49,7 @@ export function RedcapForm({
   const [saving, setSaving] = useState(false);
   const [, startTransition] = useTransition();
   const firstRender = useRef(true);
+  const router = useRouter();
 
   const ctx: FormContext = useMemo(
     () => ({ data, others: otherForms, paciente: { id: paciente.id, nome: paciente.nome } }),
@@ -81,7 +84,7 @@ export function RedcapForm({
   persistRef.current = async (payload) => {
     setSaving(true);
     try {
-      await performWithSync<UpsertColetaRedcapPayload>(
+      const res = await performWithSync<UpsertColetaRedcapPayload>(
         "upsert_coleta_redcap",
         {
           paciente_id: paciente.id,
@@ -94,6 +97,13 @@ export function RedcapForm({
         { silent: true },
       );
       setSavedAt(new Date());
+      // Gravou no servidor: invalida o cache RSC das rotas do paciente pra que
+      // reabrir/voltar NÃO mostre dados velhos (o initialData não se atualiza
+      // sozinho). Fire-and-forget. (O botão Salvar ainda dá router.refresh()
+      // pra atualizar a página atual na hora.)
+      if (res === "synced") {
+        revalidarPacienteRoutes(paciente.plantao_id, paciente.id).catch(() => {});
+      }
       return true;
     } catch (err) {
       toast.error("Erro ao salvar", { description: errMsg(err) });
@@ -168,7 +178,12 @@ export function RedcapForm({
     const merged = { ...data, ...calcSnapshot };
     startTransition(async () => {
       const ok = await persistRef.current?.({ data: merged, status });
-      if (ok) toast.success("Salvo");
+      if (ok) {
+        // Re-busca a página atual: garante que reabrir o seguimento/voltar
+        // mostre o que acabou de ser salvo (a prop initialData vem daqui).
+        router.refresh();
+        toast.success("Salvo");
+      }
     });
   }
 
