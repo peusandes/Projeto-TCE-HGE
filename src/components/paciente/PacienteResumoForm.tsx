@@ -134,6 +134,22 @@ export function PacienteResumoForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nome, leito, setor, situacao, tcle, descricao, comentarios, motivo, verificacao]);
 
+  // Não perder edições: grava o save pendente ao DESMONTAR (navegar no app) e ao
+  // ESCONDER/FECHAR a aba do navegador.
+  useEffect(() => {
+    const onPageHide = () => save.flush();
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") save.flush();
+    };
+    window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", onVisibility);
+      save.flush();
+    };
+  }, [save]);
+
 
   return (
     <div className="space-y-4">
