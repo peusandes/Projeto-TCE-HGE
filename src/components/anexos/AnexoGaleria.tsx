@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { FileText, Trash2 } from "lucide-react";
@@ -18,6 +17,7 @@ import {
 import { TIPO_ANEXO_LABEL } from "@/lib/domain/enums";
 import type { Anexo } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
+import { ZoomableImage } from "./ZoomableImage";
 
 type SignedUrlMap = Record<string, string>;
 
@@ -147,18 +147,14 @@ export function AnexoGaleria({ anexos }: { anexos: Anexo[] }) {
           {previewAnexo && urls[previewAnexo.id] && (
             <div className="flex flex-col">
               {previewAnexo.mime_type.startsWith("image/") ? (
-                <Image
+                <ZoomableImage
                   src={urls[previewAnexo.id]}
                   alt={previewAnexo.descricao ?? "Anexo"}
-                  width={1200}
-                  height={1200}
-                  className="w-full h-auto max-h-[75dvh] object-contain bg-black"
-                  unoptimized
                 />
               ) : (
                 <iframe
                   src={urls[previewAnexo.id]}
-                  className="w-full h-[75dvh]"
+                  className="w-full h-[80dvh]"
                   title="PDF preview"
                 />
               )}
