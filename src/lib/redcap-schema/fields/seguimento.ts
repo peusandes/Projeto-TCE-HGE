@@ -94,6 +94,13 @@ export const SEGUIMENTO: InstrumentDef = {
       min: 0,
       note: "Colete apenas o primeiro HGT do dia.",
     },
+    {
+      name: "ephi_seg",
+      label: "Quantos episódios hiperglicêmicos (HGT > 180)?",
+      type: "number",
+      required: true,
+      min: 0,
+    },
     { name: "bicarbonato_seg", label: "Bicarbonato", type: "text", required: true },
     { name: "creatinina_seg",  label: "Creatinina",  type: "text", required: true },
     { name: "ureia_seg",       label: "Ureia",       type: "text" },
