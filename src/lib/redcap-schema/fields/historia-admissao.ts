@@ -122,7 +122,7 @@ export const HISTORIA_ADMISSAO: InstrumentDef = {
     // Neuro
     { name: "_h_neuro", label: "Avaliação neurológica", type: "descriptive", section: "header", content: "" },
     { name: "ocular_admissao",  label: "Glasgow — ocular",  type: "number", min: 1, max: 4, integer: true, required: true },
-    { name: "verbal_admissao",  label: "Glasgow — verbal",  type: "number", min: 1, max: 6, integer: true, required: true },
+    { name: "verbal_admissao",  label: "Glasgow — verbal",  type: "number", min: 1, max: 5, integer: true, required: true },
     { name: "motor_admissao",   label: "Glasgow — motor",   type: "number", min: 1, max: 6, integer: true, required: true },
     { name: "pupilas_admissao", label: "Pupilas reativas",  type: "number", min: 0, max: 2, integer: true, required: true, note: "Quantidade de pupilas REATIVAS." },
     {
