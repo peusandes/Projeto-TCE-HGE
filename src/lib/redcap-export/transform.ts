@@ -12,7 +12,10 @@
  *
  * Regras de conversão:
  *  - Campos descritivos (nome começa com "_") são ignorados.
- *  - Campos CALC são ignorados (o REDCap recalcula sozinho e rejeita import).
+ *  - Campos CALC do REDCap (@CALC) são ignorados (o REDCap recalcula e rejeita
+ *    import). Campos calc só na UI mas que o REDCap guarda como number normal
+ *    (marcados `exportCalc`: iss, gcs_admissao, gcs_minus_p_admissao) SÃO
+ *    exportados — senão chegam vazios e viram digitação manual.
  *  - O próprio `record_id`, se vier no dados, é ignorado (o id canônico do
  *    paciente sempre vence — trava de isolação).
  *  - Valor array (checkbox) vira `campo___valor = "1"` por item marcado.
@@ -46,9 +49,20 @@ export const RECORD_ID_FIELD = "record_id";
 /** Instrumentos repetíveis no REDCap (cada instância é uma linha). */
 const REPETIVEIS = new Set(["seguimento"]);
 
-/** Campos calculados (REDCap recalcula sozinho — não devem ser importados). */
+/**
+ * Campos que o REDCap recalcula sozinho (@CALC) — NÃO devem ser importados
+ * (mandar o valor seria rejeitado e o REDCap recalcula a partir das fontes).
+ *
+ * Importante: nem todo campo calc do SITE é @CALC no REDCap. Alguns (iss,
+ * gcs_admissao, gcs_minus_p_admissao) são auto-calculados na UI por conveniência
+ * mas guardados como campo number NORMAL no REDCap — esses (marcados com
+ * `exportCalc`) PRECISAM ser exportados, senão chegam vazios e viram digitação
+ * manual. Só excluímos os calc que o REDCap de fato recalcula.
+ */
 const CAMPOS_CALC: ReadonlySet<string> = new Set(
-  ALL_INSTRUMENTS.flatMap((inst) => inst.fields.filter((f) => f.type === "calc").map((f) => f.name)),
+  ALL_INSTRUMENTS.flatMap((inst) =>
+    inst.fields.filter((f) => f.type === "calc" && !f.exportCalc).map((f) => f.name),
+  ),
 );
 
 function valorRedcap(v: unknown): string | null {

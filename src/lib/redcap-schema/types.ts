@@ -55,6 +55,16 @@ export type FieldDef = {
   calc?: (ctx: FormContext) => number | string | null;
   calcLabel?: string;
   calcUnit?: string;
+  /**
+   * Campo calc na UI (auto-calculado pra conveniência) mas que o REDCap guarda
+   * como campo NORMAL (text/number), não como @CALC. Nesses casos o REDCap NÃO
+   * recalcula sozinho, então o valor calculado PRECISA ser exportado — senão
+   * chega vazio no REDCap e vira digitação manual. Quando o REDCap também é
+   * @CALC (idade, tempos), deixar false: o REDCap recalcula a partir das fontes
+   * e mandar o valor seria rejeitado. (Verificado via content=metadata: só iss,
+   * gcs_admissao e gcs_minus_p_admissao são plain number no REDCap.)
+   */
+  exportCalc?: boolean;
 
   // Descriptive — bloco informativo, sem input
   content?: string | ((ctx: FormContext) => string);

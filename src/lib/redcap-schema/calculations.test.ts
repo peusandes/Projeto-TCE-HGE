@@ -60,6 +60,17 @@ describe("calcGcs", () => {
     const ctx = makeCtx({ ocular_admissao: "1", verbal_admissao: "1", motor_admissao: "1" });
     expect(calcGcs(ctx)).toBe(3);
   });
+
+  it("nunca passa de 15: verbal clampa em 5 mesmo se o input for 6", () => {
+    // verbal 6 é clinicamente impossível; sem clamp daria GCS=16 (> max REDCap)
+    const ctx = makeCtx({ ocular_admissao: 4, verbal_admissao: 6, motor_admissao: 6 });
+    expect(calcGcs(ctx)).toBe(15);
+  });
+
+  it("arredonda componentes decimais pra inteiro", () => {
+    const ctx = makeCtx({ ocular_admissao: 3.4, verbal_admissao: 4.6, motor_admissao: 5 });
+    expect(calcGcs(ctx)).toBe(3 + 5 + 5);
+  });
 });
 
 describe("calcGcsMinusP", () => {
@@ -103,6 +114,16 @@ describe("calcGcsMinusP", () => {
     });
     expect(calcGcsMinusP(ctx)).toBe(1);
   });
+
+  it("nunca passa de 15 (GCS clampado herda o teto)", () => {
+    const ctx = makeCtx({
+      ocular_admissao: 4,
+      verbal_admissao: 6, // clampa em 5 → GCS 15
+      motor_admissao: 6,
+      pupilas_admissao: 2,
+    });
+    expect(calcGcsMinusP(ctx)).toBe(15);
+  });
 });
 
 describe("calcISS", () => {
@@ -135,6 +156,23 @@ describe("calcISS", () => {
   it("com apenas 1 ou 2 AIS, soma os quadrados existentes", () => {
     expect(calcISS(makeCtx({ torax_ais: 3 }))).toBe(9);
     expect(calcISS(makeCtx({ torax_ais: 3, abdome_ais: 4 }))).toBe(9 + 16);
+  });
+
+  it("arredonda AIS decimal e respeita a regra do 6 (não burla com 6.5)", () => {
+    // 6.5 arredonda pra 6 (clampado) → regra do 75 vale; sem isso daria 42.25
+    expect(calcISS(makeCtx({ cabeca_pescoco_ais: 6.5 }))).toBe(75);
+    // 5.4 → 5 → 25
+    expect(calcISS(makeCtx({ torax_ais: 5.4 }))).toBe(25);
+  });
+
+  it("nunca passa de 75 (faixa do REDCap)", () => {
+    const ctx = makeCtx({
+      cabeca_pescoco_ais: 5,
+      face_ais: 5,
+      torax_ais: 5,
+      abdome_ais: 5,
+    });
+    expect(calcISS(ctx)).toBe(75); // top3: 5²+5²+5² = 75
   });
 });
 

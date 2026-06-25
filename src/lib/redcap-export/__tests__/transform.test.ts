@@ -156,20 +156,65 @@ describe("coletasParaRegistros", () => {
     expect(recs[0].ruimObj).toBeUndefined();
   });
 
-  it("exclui campos CALC (REDCap recalcula) e record_id vindo no dados", () => {
+  it("exclui campos @CALC do REDCap, mas record_id do dados nunca vence o canônico", () => {
     const recs = coletasParaRegistros("100", [
       {
         tipo: "historia_admissao",
         seq: 1,
         status: "COMPLETE",
-        // iss/gcs_admissao são calc; record_id não pode sobrescrever o canônico
-        dados: { iss: 25, gcs_admissao: 15, record_id: "999", pas_adm: 120 },
+        // tempo_trauma_porta é @CALC no REDCap (recalculado lá) → não exporta;
+        // record_id não pode sobrescrever o canônico
+        dados: { tempo_trauma_porta: 3.5, record_id: "999", pas_adm: 120 },
+      },
+      {
+        tipo: "dados_demograficos",
+        seq: 1,
+        status: "COMPLETE",
+        // idade é @CALC no REDCap → não exporta
+        dados: { idade: 42, sexo: 0 },
       },
     ]);
     expect(recs[0].record_id).toBe("100"); // canônico venceu
-    expect(recs[0].iss).toBeUndefined();
-    expect(recs[0].gcs_admissao).toBeUndefined();
-    expect(recs[0].pas_adm).toBe("120"); // campo normal preservado
+    expect(recs.some((r) => "tempo_trauma_porta" in r)).toBe(false);
+    expect(recs.some((r) => "idade" in r)).toBe(false);
+    // campo normal preservado
+    const admRec = recs.find((r) => r.pas_adm);
+    expect(admRec?.pas_adm).toBe("120");
+  });
+
+  it("EXPORTA calc que o REDCap guarda como number normal (iss/gcs/gcs-p)", () => {
+    // Esses campos são auto-calculados na UI mas NÃO são @CALC no REDCap, então
+    // têm que ser exportados — senão chegam vazios e viram digitação manual.
+    const recs = coletasParaRegistros("100", [
+      {
+        tipo: "historia_admissao",
+        seq: 1,
+        status: "COMPLETE",
+        dados: {
+          iss: 9,
+          gcs_admissao: 15,
+          gcs_minus_p_admissao: 15,
+          iss_vazio_nao_exporta: null,
+        },
+      },
+    ]);
+    expect(recs[0].iss).toBe("9");
+    expect(recs[0].gcs_admissao).toBe("15");
+    expect(recs[0].gcs_minus_p_admissao).toBe("15");
+  });
+
+  it("não exporta calc number quando o valor calculado é null", () => {
+    // ISS fica null quando faltam os AIS — não deve exportar nada vazio.
+    const recs = coletasParaRegistros("100", [
+      {
+        tipo: "historia_admissao",
+        seq: 1,
+        status: "COMPLETE",
+        dados: { iss: null, gcs_admissao: 11, pas_adm: 120 },
+      },
+    ]);
+    expect("iss" in recs[0]).toBe(false);
+    expect(recs[0].gcs_admissao).toBe("11");
   });
 
   it("ISOLAÇÃO: todos os registros usam o mesmo record_id", () => {

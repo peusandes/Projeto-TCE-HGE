@@ -115,6 +115,8 @@ export const HISTORIA_ADMISSAO: InstrumentDef = {
       calc: calcISS,
       calcLabel: "Soma dos quadrados dos 3 maiores AIS. Se qualquer AIS = 6, ISS = 75.",
       required: true,
+      // REDCap guarda como number (não @CALC) → exportar o valor calculado.
+      exportCalc: true,
     },
 
     // Neuro
@@ -129,6 +131,8 @@ export const HISTORIA_ADMISSAO: InstrumentDef = {
       type: "calc",
       calc: calcGcs,
       calcLabel: "ocular + verbal + motor",
+      // REDCap guarda como number (não @CALC) → exportar o valor calculado.
+      exportCalc: true,
     },
     {
       name: "gcs_minus_p_admissao",
@@ -136,6 +140,8 @@ export const HISTORIA_ADMISSAO: InstrumentDef = {
       type: "calc",
       calc: calcGcsMinusP,
       calcLabel: "GCS - (2 - pupilas reativas)",
+      // REDCap guarda como number (não @CALC) → exportar o valor calculado.
+      exportCalc: true,
     },
 
     // Monitorização
