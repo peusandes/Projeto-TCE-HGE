@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AlertTriangle, ChevronRight } from "lucide-react";
-import { SituacaoBadge, TcleBadge, SITUACAO_ACCENT } from "./PacienteBadges";
+import { SituacaoBadge, TcleBadge, RedcapElegivelBadge, SITUACAO_ACCENT } from "./PacienteBadges";
 import { ResponsavelControl } from "./ResponsavelControl";
 import type { ResponsavelInfo } from "./ResponsavelAvatar";
 import type { Situacao, TcleStatus, VerificacaoAlta } from "@/lib/domain/enums";
@@ -16,6 +16,8 @@ type Props = {
     descricao: string | null;
     comentarios: string | null;
     verificacao_alta?: VerificacaoAlta | null;
+    /** Elegível para exportar ao REDCap (gate `redcap_export_habilitado`). */
+    redcapElegivel?: boolean;
   };
   /** Plantão de onde a navegação parte. Quando definido, o detalhe do paciente
    *  fica preso a esse plantão (back link + revalidações + reservas). Sem ele,
@@ -122,6 +124,9 @@ export function PacienteCard({ paciente, plantaoContextoId, reserva }: Props) {
               {isForaDoutore && <VerificacaoBadge tipo="fora" />}
               {!isPendenteAlta && <SituacaoBadge value={paciente.situacao} />}
               {paciente.situacao !== "EXCLUSAO" && <TcleBadge value={paciente.tcle_status} />}
+              {paciente.situacao !== "EXCLUSAO" && paciente.redcapElegivel && (
+                <RedcapElegivelBadge />
+              )}
             </div>
             {reserva && paciente.situacao !== "EXCLUSAO" && (
               <div className="mt-2 flex items-center" onClick={(e) => e.preventDefault()}>

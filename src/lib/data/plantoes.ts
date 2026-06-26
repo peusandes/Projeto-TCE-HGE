@@ -47,7 +47,7 @@ export async function getMapaDoPlantao(plantaoId: string) {
       id, plantao_id, paciente_id, setor, leito, situacao, tcle_status,
       descricao, comentarios, verificacao_alta, ordem, responsavel_id,
       concluido_em,
-      pacientes ( id, nome, redcap_id, motivo_exclusao ),
+      pacientes ( id, nome, redcap_id, redcap_export_habilitado, motivo_exclusao ),
       responsavel:responsavel_id ( id, nome, avatar_url )
     `,
     )

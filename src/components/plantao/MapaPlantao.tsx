@@ -33,7 +33,7 @@ type MapaItem = {
   responsavel_id?: string | null;
   responsavel?: ResponsavelInfo | null;
   concluido_em?: string | null;
-  pacientes: { id: string; nome: string } | null;
+  pacientes: { id: string; nome: string; redcap_export_habilitado?: boolean } | null;
 };
 
 export function MapaPlantao({
@@ -288,6 +288,7 @@ export function MapaPlantao({
                           descricao: item.descricao,
                           comentarios: item.comentarios,
                           verificacao_alta: item.verificacao_alta,
+                          redcapElegivel: item.pacientes?.redcap_export_habilitado ?? false,
                         }}
                         plantaoContextoId={plantaoId}
                         reserva={{

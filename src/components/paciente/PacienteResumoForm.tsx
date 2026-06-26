@@ -33,6 +33,7 @@ import type { Paciente } from "@/lib/domain/types";
 import { debounce, cn, errMsg } from "@/lib/utils";
 import { ConfirmAltaDialog } from "./ConfirmAltaDialog";
 import { VerificacaoAltaBanner, ForaDoutoreBanner } from "./VerificacaoAltaBanner";
+import { RedcapElegivelBadge } from "@/components/plantao/PacienteBadges";
 
 const FIELD_LABEL = "text-[10px] uppercase tracking-editorial text-ash";
 const FIELD_INPUT =
@@ -175,18 +176,25 @@ export function PacienteResumoForm({
         <ForaDoutoreBanner onLimpar={() => setVerificacao(null)} />
       )}
 
-      <div className="flex items-center justify-end gap-2 text-[10px] tracking-wide text-ash font-mono">
-        <span
-          className={cn(
-            "size-1.5 rounded-full",
-            saving ? "bg-saffron animate-pulse" : "bg-moss",
-          )}
-        />
-        {saving
-          ? "salvando..."
-          : savedAt
-            ? `salvo · ${savedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
-            : "auto-salva ao editar"}
+      <div className="flex items-center justify-between gap-2">
+        {situacao !== "EXCLUSAO" && paciente.redcap_export_habilitado ? (
+          <RedcapElegivelBadge />
+        ) : (
+          <span />
+        )}
+        <div className="flex items-center gap-2 text-[10px] tracking-wide text-ash font-mono">
+          <span
+            className={cn(
+              "size-1.5 rounded-full",
+              saving ? "bg-saffron animate-pulse" : "bg-moss",
+            )}
+          />
+          {saving
+            ? "salvando..."
+            : savedAt
+              ? `salvo · ${savedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+              : "auto-salva ao editar"}
+        </div>
       </div>
 
       <div className="space-y-2">

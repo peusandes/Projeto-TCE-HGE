@@ -1,3 +1,4 @@
+import { Flag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   SITUACAO_LABEL,
@@ -43,6 +44,20 @@ export function TcleBadge({ value }: { value: TcleStatus }) {
     <span className={cn(PILL_BASE, t.text, t.bg, t.border)}>
       <span className={cn("size-1.5 rounded-full", t.dot)} />
       {short}
+    </span>
+  );
+}
+
+/** Flag roxa: paciente elegível para exportação ao REDCap (nova admissão /
+ *  critério liberado). Espelha o gate real `redcap_export_habilitado`. */
+export function RedcapElegivelBadge() {
+  return (
+    <span
+      className={cn(PILL_BASE, "text-plum bg-plum/15 border-plum/30")}
+      title="Elegível para exportar ao REDCap"
+    >
+      <Flag className="h-2.5 w-2.5" strokeWidth={2.6} />
+      REDCap
     </span>
   );
 }
