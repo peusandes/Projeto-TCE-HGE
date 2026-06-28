@@ -14,6 +14,7 @@ import {
   redcapConfigurado,
 } from "@/lib/redcap-export/client";
 import { normalizeNome, canonNome } from "@/lib/redcap-export/nome";
+import { checarDados, type ValorSuspeito } from "@/lib/redcap-schema/plausibilidade";
 
 /**
  * Exportação de UM paciente pro REDCap (Projeto TCE 3.0 — longitudinal,
@@ -57,6 +58,9 @@ async function carregar(pacienteId: string) {
   return { supabase, pac, coletas };
 }
 
+/** Valor fora da faixa plausível + de onde veio (instrumento/seq). */
+export type SuspeitoExport = ValorSuspeito & { tipo: string; seq: number };
+
 export type PreviewExport = {
   configurado: boolean;
   habilitado: boolean;
@@ -70,7 +74,20 @@ export type PreviewExport = {
   eventos: string[];
   semDados: boolean;
   semNome: boolean;
+  /** Valores implausíveis (ex.: exame trocado) — envio pede confirmação. */
+  suspeitos: SuspeitoExport[];
 };
+
+/** Varre as coletas e junta os valores fora de faixa, com a origem. */
+function coletarSuspeitos(coletas: ColetaParaExport[]): SuspeitoExport[] {
+  const out: SuspeitoExport[] = [];
+  for (const c of coletas) {
+    for (const s of checarDados(c.dados)) {
+      out.push({ ...s, tipo: c.tipo, seq: c.seq });
+    }
+  }
+  return out;
+}
 
 const CTRL = new Set([
   "record_id",
@@ -117,6 +134,7 @@ export async function previewExportRedcap(pacienteId: string): Promise<PreviewEx
     eventos,
     semDados: coletas.length === 0,
     semNome: criando && !nome,
+    suspeitos: coletarSuspeitos(coletas),
   };
 }
 
@@ -160,7 +178,10 @@ async function claimCriacao(
 export type EnvioResult = { recordId: string; criou: boolean; registros: number };
 
 /** Envia de fato pro REDCap (só este paciente). */
-export async function enviarParaRedcap(pacienteId: string): Promise<EnvioResult> {
+export async function enviarParaRedcap(
+  pacienteId: string,
+  opts: { confirmarSuspeitos?: boolean } = {},
+): Promise<EnvioResult> {
   const { supabase, pac, coletas } = await carregar(pacienteId);
 
   if (!pac.redcap_export_habilitado) {
@@ -169,6 +190,16 @@ export async function enviarParaRedcap(pacienteId: string): Promise<EnvioResult>
     );
   }
   if (coletas.length === 0) throw new Error("Este paciente não tem nenhuma coleta pra enviar.");
+
+  // Blindagem: valor fora da faixa plausível (ex.: exame trocado → hemácias
+  // 0.0059, sódio 26). Não bloqueia de vez — exige confirmação explícita.
+  const suspeitos = coletarSuspeitos(coletas);
+  if (suspeitos.length > 0 && !opts.confirmarSuspeitos) {
+    const lista = suspeitos.map((s) => `${s.rotulo} ${s.valor} (${s.tipo})`).join(", ");
+    throw new Error(
+      `Valores suspeitos (fora da faixa plausível): ${lista}. Confira se não é outro exame — confirme o envio se estiver certo.`,
+    );
+  }
   if (!redcapConfigurado()) {
     throw new Error("API do REDCap ainda não configurada (REDCAP_API_URL / REDCAP_API_TOKEN).");
   }

@@ -14,6 +14,7 @@ import { planejarSeguimentos } from "./seguimento-plan";
 import { LOCAL_PCT_LABEL, inferirSetor } from "./local";
 import { mapearParaAlta } from "./map-alta";
 import { usuarioNaEnvAllowlist } from "@/lib/telegram/auth";
+import { checarDados, mensagemSuspeito } from "@/lib/redcap-schema/plausibilidade";
 import { SETORES, SETOR_LABEL, type Setor } from "@/lib/domain/enums";
 import {
   listarPacientes,
@@ -291,6 +292,68 @@ async function criarAdmissao(
   await sendMessage(chatId, linhas.join("\n"));
 }
 
+// ─── Blindagem de plausibilidade (confirmação antes de gravar) ───────────────
+
+/**
+ * Descreve a gravação que SERIA feita. Serializável (vai pro payload do pending
+ * quando precisa de confirmação). `parse.dados` sempre usa as chaves _seg.
+ */
+type AcaoGravacao =
+  | { tipo: "seguimento"; paciente: PacienteRef; admissaoIso: string; parse: LaudoParse; examIso: string; ligante: string }
+  | { tipo: "alta"; paciente: PacienteRef; parse: LaudoParse; examIso: string; ligante: string }
+  | { tipo: "admissao"; nome: string; setor: Setor; plantaoId: string; parse: LaudoParse; examIso: string; ligante: string };
+
+/** Executa de fato a gravação descrita pela ação. */
+async function executarGravacao(chatId: number, acao: AcaoGravacao): Promise<void> {
+  if (acao.tipo === "seguimento") {
+    await gravarExame(chatId, acao.paciente, acao.admissaoIso, acao.parse, acao.examIso, acao.ligante);
+  } else if (acao.tipo === "alta") {
+    await gravarAlta(chatId, acao.paciente, acao.parse, acao.examIso, acao.ligante);
+  } else {
+    await criarAdmissao(chatId, acao.nome, acao.setor, acao.plantaoId, acao.parse, acao.examIso, acao.ligante);
+  }
+}
+
+/**
+ * Gate: se o laudo tem valor fora da faixa plausível (ex.: PDF do exame errado →
+ * hemácias 0.0059, sódio 26), NÃO grava direto — pergunta "gravar mesmo assim?".
+ * Senão, grava na hora. O pending reusa o kind "await_patient" (já permitido no
+ * banco) com um discriminador `fase` no payload — evita migration na base.
+ */
+async function confirmarSeNecessario(
+  chatId: number,
+  userId: number,
+  acao: AcaoGravacao,
+): Promise<void> {
+  const suspeitos = checarDados(acao.parse.dados);
+  if (suspeitos.length === 0) {
+    await executarGravacao(chatId, acao);
+    return;
+  }
+  const id = await criarPending({
+    chatId,
+    userId,
+    kind: "await_patient",
+    payload: { fase: "suspeito", acao },
+  });
+  const nomePaciente = acao.tipo === "admissao" ? acao.nome : acao.paciente.nome;
+  const linhas: string[] = [
+    "🚨 <b>Valor(es) fora da faixa esperada</b>",
+    `👤 <b>${esc(nomePaciente)}</b> · exame ${fmtBr(acao.examIso)}`,
+    "",
+    "Pode ser <b>exame trocado</b> ou unidade errada:",
+    ...suspeitos.map((s) => `• ${esc(mensagemSuspeito(s))}`),
+    "",
+    "Gravar mesmo assim?",
+  ];
+  await sendMessage(chatId, linhas.join("\n"), {
+    buttons: [[
+      { text: "✅ Gravar mesmo assim", callback_data: `sus:${id}:y` },
+      { text: "❌ Descartar", callback_data: `sus:${id}:n` },
+    ]],
+  });
+}
+
 /** Após ter o paciente resolvido: confere nascimento → admissão → grava. */
 async function comPacienteResolvido(
   chatId: number,
@@ -333,7 +396,7 @@ async function comPacienteResolvido(
 
   // Exame do dia da alta → vai pro instrumento "alta", sem mexer no seguimento.
   if (isAlta) {
-    await gravarAlta(chatId, paciente, parse, examIso, ligante);
+    await confirmarSeNecessario(chatId, userId, { tipo: "alta", paciente, parse, examIso, ligante });
     return;
   }
 
@@ -355,7 +418,14 @@ async function comPacienteResolvido(
     return;
   }
 
-  await gravarExame(chatId, paciente, adm, parse, examIso, ligante);
+  await confirmarSeNecessario(chatId, userId, {
+    tipo: "seguimento",
+    paciente,
+    admissaoIso: adm,
+    parse,
+    examIso,
+    ligante,
+  });
 }
 
 // ─── Entradas ────────────────────────────────────────────────────────────────
@@ -449,6 +519,21 @@ async function onCallback(cb: TgCallback): Promise<void> {
     plantaoId?: string;
   };
 
+  if (tipo === "sus") {
+    await apagarPending(pendingId);
+    if (arg === "n") {
+      await sendMessage(chatId, "Ok, <b>não gravei</b>. Confira se o PDF é o exame certo e reenvie.");
+      return;
+    }
+    const acao = (pending.payload as { acao?: AcaoGravacao }).acao;
+    if (!acao) {
+      await sendMessage(chatId, "Não consegui recuperar os dados. Reenvie o PDF.");
+      return;
+    }
+    await executarGravacao(chatId, acao);
+    return;
+  }
+
   if (tipo === "p") {
     await apagarPending(pendingId);
     if (arg === "typo") {
@@ -486,7 +571,15 @@ async function onCallback(cb: TgCallback): Promise<void> {
     }
     const setor = inferirSetor(p.parse.procedencia);
     if (setor) {
-      await criarAdmissao(chatId, p.nome, setor, pl.id, p.parse, p.examIso, p.ligante);
+      await confirmarSeNecessario(chatId, pending.user_id, {
+        tipo: "admissao",
+        nome: p.nome,
+        setor,
+        plantaoId: pl.id,
+        parse: p.parse,
+        examIso: p.examIso,
+        ligante: p.ligante,
+      });
     } else {
       await pedirSetor(chatId, pending.user_id, {
         nome: p.nome,
@@ -506,7 +599,15 @@ async function onCallback(cb: TgCallback): Promise<void> {
       await sendMessage(chatId, "Opção inválida. Reenvie o PDF.");
       return;
     }
-    await criarAdmissao(chatId, p.nome, setor, p.plantaoId, p.parse, p.examIso, p.ligante);
+    await confirmarSeNecessario(chatId, pending.user_id, {
+      tipo: "admissao",
+      nome: p.nome,
+      setor,
+      plantaoId: p.plantaoId,
+      parse: p.parse,
+      examIso: p.examIso,
+      ligante: p.ligante,
+    });
     return;
   }
 
@@ -537,7 +638,14 @@ async function onText(msg: TgMessage): Promise<void> {
       return;
     }
     await apagarPending(pending.id);
-    await gravarExame(chatId, p.paciente, admIso, p.parse, p.examIso, p.ligante);
+    await confirmarSeNecessario(chatId, pending.user_id, {
+      tipo: "seguimento",
+      paciente: p.paciente,
+      admissaoIso: admIso,
+      parse: p.parse,
+      examIso: p.examIso,
+      ligante: p.ligante,
+    });
     return;
   }
 

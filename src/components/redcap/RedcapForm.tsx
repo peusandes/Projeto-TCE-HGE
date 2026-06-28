@@ -15,6 +15,7 @@ import type {
   InstrumentDef,
 } from "@/lib/redcap-schema/types";
 import { validateField } from "@/lib/redcap-schema/validations";
+import { checarDados } from "@/lib/redcap-schema/plausibilidade";
 import { performWithSync } from "@/lib/sync/perform";
 import type { UpsertColetaRedcapPayload } from "@/lib/sync/executors";
 import { debounce, cn, errMsg } from "@/lib/utils";
@@ -184,6 +185,10 @@ export function RedcapForm({
   const missingRequired = required.filter((f) => !isFilled(f));
   const canComplete = missingRequired.length === 0;
 
+  // Blindagem: valores laboratoriais/vitais fora da faixa plausível (ex.: exame
+  // trocado → hemácias 0.0059, sódio 26). Não bloqueia; pede confirmação.
+  const suspeitos = useMemo(() => checarDados(data), [data]);
+
   // Salvar AGORA, com qualquer status (completo ou não). Cancela o debounce
   // pendente pra não gravar duas vezes.
   function salvarAgora() {
@@ -206,12 +211,20 @@ export function RedcapForm({
       aplicarStatusCompleto("INCOMPLETE");
       return;
     }
-    // Faltam obrigatórios: não bloqueia — avisa quais e oferece concluir assim mesmo.
-    if (!canComplete) {
-      const nomes = missingRequired.map((f) => f.label).join(", ");
-      toast.warning(`Faltam ${missingRequired.length} campo(s) obrigatório(s)`, {
-        description: nomes,
-        duration: 10000,
+    // Faltam obrigatórios e/ou há valor implausível: não bloqueia — avisa e
+    // oferece concluir assim mesmo.
+    if (!canComplete || suspeitos.length > 0) {
+      const partes: string[] = [];
+      if (!canComplete) {
+        partes.push(`Faltam ${missingRequired.length} obrigatório(s): ${missingRequired.map((f) => f.label).join(", ")}`);
+      }
+      if (suspeitos.length > 0) {
+        partes.push(`Valor(es) suspeito(s): ${suspeitos.map((s) => `${s.rotulo} ${s.valor}`).join(", ")}`);
+      }
+      const titulo = suspeitos.length > 0 ? "Confira antes de concluir" : `Faltam ${missingRequired.length} campo(s) obrigatório(s)`;
+      toast.warning(titulo, {
+        description: partes.join(" · "),
+        duration: 12000,
         action: {
           label: "Concluir mesmo assim",
           onClick: () => aplicarStatusCompleto("COMPLETE"),

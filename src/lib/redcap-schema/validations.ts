@@ -11,6 +11,7 @@
  */
 
 import type { FormContext } from "./types";
+import { checarValor, mensagemSuspeito } from "./plausibilidade";
 
 export type DateWarning = {
   field: string;
@@ -227,6 +228,12 @@ export function validateInstrument(instrumentId: string, ctx: FormContext): Date
     const msg = r.check(ctx);
     if (msg) out.push({ field: r.field, message: msg });
   }
+  // Blindagem de plausibilidade: qualquer campo (lab/vital) fora da faixa vira
+  // um warning — não bloqueia, só sinaliza pra revisão (ver plausibilidade.ts).
+  for (const [campo, valor] of Object.entries(ctx.data)) {
+    const s = checarValor(campo, valor);
+    if (s) out.push({ field: campo, message: mensagemSuspeito(s) });
+  }
   return out;
 }
 
@@ -242,5 +249,8 @@ export function validateField(
     const msg = r.check(ctx);
     if (msg) return msg;
   }
+  // Blindagem de plausibilidade do valor do próprio campo.
+  const suspeito = checarValor(fieldName, ctx.data[fieldName]);
+  if (suspeito) return mensagemSuspeito(suspeito);
   return null;
 }

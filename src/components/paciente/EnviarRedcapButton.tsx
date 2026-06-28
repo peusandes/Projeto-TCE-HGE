@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Upload, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -37,11 +38,13 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome, habilitado }: Pro
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<PreviewExport | null>(null);
   const [carregandoPreview, setCarregandoPreview] = useState(false);
+  const [confirmouSuspeitos, setConfirmouSuspeitos] = useState(false);
   const [enviando, startEnvio] = useTransition();
 
   useEffect(() => {
     if (!open) {
       setPreview(null);
+      setConfirmouSuspeitos(false);
       return;
     }
     let vivo = true;
@@ -60,8 +63,14 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome, habilitado }: Pro
     };
   }, [open, pacienteId]);
 
+  const temSuspeitos = Boolean(preview && preview.suspeitos.length > 0);
   const podeEnviar = Boolean(
-    preview && preview.configurado && !preview.semDados && !preview.semNome && !enviando,
+    preview &&
+      preview.configurado &&
+      !preview.semDados &&
+      !preview.semNome &&
+      !enviando &&
+      (!temSuspeitos || confirmouSuspeitos),
   );
 
   if (!habilitado) {
@@ -81,7 +90,7 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome, habilitado }: Pro
   function handleEnviar() {
     startEnvio(async () => {
       try {
-        const res = await enviarParaRedcap(pacienteId);
+        const res = await enviarParaRedcap(pacienteId, { confirmarSuspeitos: confirmouSuspeitos });
         toast.success(
           res.criou ? `Paciente criado no REDCap (id ${res.recordId})` : "Dados enviados ao REDCap",
           { description: `${res.registros} registro(s) enviado(s).` },
@@ -165,6 +174,33 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome, habilitado }: Pro
                         automaticamente (não sobrescreve).
                       </p>
                     )}
+                  </div>
+                )}
+
+                {temSuspeitos && (
+                  <div className="space-y-2 rounded-md border border-vermillion/40 bg-vermillion/[0.06] p-3 text-[12px]">
+                    <p className="flex items-center gap-1.5 font-medium text-vermillion">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      Valores fora da faixa plausível — pode ser exame trocado
+                    </p>
+                    <ul className="space-y-0.5 list-disc pl-4 text-graphite">
+                      {preview.suspeitos.map((s, i) => (
+                        <li key={`${s.tipo}-${s.campo}-${i}`}>
+                          <strong className="text-ink">{s.rotulo} {s.valor}{s.unidade ? ` ${s.unidade}` : ""}</strong>{" "}
+                          ({s.tipo}{s.tipo === "seguimento" ? ` dia ${s.seq}` : ""}) — {s.motivo === "baixo" ? `abaixo de ${s.min}` : `acima de ${s.max}`}
+                        </li>
+                      ))}
+                    </ul>
+                    <label className="flex items-start gap-2 pt-1 cursor-pointer">
+                      <Checkbox
+                        checked={confirmouSuspeitos}
+                        onCheckedChange={(v) => setConfirmouSuspeitos(v === true)}
+                        className="mt-0.5"
+                      />
+                      <span className="text-graphite">
+                        Revisei estes valores e quero <strong className="text-ink">enviar mesmo assim</strong>.
+                      </span>
+                    </label>
                   </div>
                 )}
 
