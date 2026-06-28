@@ -175,12 +175,14 @@ export function RedcapForm({
     [instrument.fields, ctx, data],
   );
   const required = visibleFields.filter((f) => f.required);
-  const requiredFilled = required.filter((f) => {
+  const isFilled = (f: (typeof required)[number]) => {
     const v = data[f.name];
     if (Array.isArray(v)) return v.length > 0;
     return v !== null && v !== undefined && v !== "";
-  });
-  const canComplete = required.length === 0 || requiredFilled.length === required.length;
+  };
+  const requiredFilled = required.filter(isFilled);
+  const missingRequired = required.filter((f) => !isFilled(f));
+  const canComplete = missingRequired.length === 0;
 
   // Salvar AGORA, com qualquer status (completo ou não). Cancela o debounce
   // pendente pra não gravar duas vezes.
@@ -199,11 +201,28 @@ export function RedcapForm({
   }
 
   function handleMarkComplete() {
-    if (!canComplete) {
-      toast.warning("Preencha todos os campos obrigatórios antes de marcar como Completo.");
+    // Reabrir um instrumento já completo nunca precisa de validação.
+    if (status === "COMPLETE") {
+      aplicarStatusCompleto("INCOMPLETE");
       return;
     }
-    const next: FormStatus = status === "COMPLETE" ? "INCOMPLETE" : "COMPLETE";
+    // Faltam obrigatórios: não bloqueia — avisa quais e oferece concluir assim mesmo.
+    if (!canComplete) {
+      const nomes = missingRequired.map((f) => f.label).join(", ");
+      toast.warning(`Faltam ${missingRequired.length} campo(s) obrigatório(s)`, {
+        description: nomes,
+        duration: 10000,
+        action: {
+          label: "Concluir mesmo assim",
+          onClick: () => aplicarStatusCompleto("COMPLETE"),
+        },
+      });
+      return;
+    }
+    aplicarStatusCompleto("COMPLETE");
+  }
+
+  function aplicarStatusCompleto(next: FormStatus) {
     setStatus(next);
     toast.success(`Marcado como ${STATUS_LABEL[next]}`);
 
@@ -298,7 +317,6 @@ export function RedcapForm({
         </Button>
         <Button
           onClick={handleMarkComplete}
-          disabled={!canComplete}
           size="lg"
           className={cn(
             "w-full",
@@ -317,11 +335,15 @@ export function RedcapForm({
             </>
           )}
         </Button>
-        {!canComplete && required.length > 0 && (
-          <p className="text-[11px] text-saffron flex items-center gap-1.5">
-            <AlertCircle className="h-3 w-3" />
-            Faltam {required.length - requiredFilled.length} obrigatório(s) para concluir.
-          </p>
+        {!canComplete && status !== "COMPLETE" && required.length > 0 && (
+          <div className="flex items-start gap-1.5 text-[11px] text-saffron">
+            <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
+            <span>
+              Faltam {missingRequired.length} obrigatório(s):{" "}
+              {missingRequired.map((f) => f.label).join(", ")}. Dá pra concluir
+              assim mesmo.
+            </span>
+          </div>
         )}
       </div>
     </div>
