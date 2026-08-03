@@ -28,8 +28,31 @@ import { checarDados, type ValorSuspeito } from "@/lib/redcap-schema/plausibilid
  *    homônimo), aborta — nunca sobrescreve. Só cria nomes inéditos.
  *  - claim reserva o redcap_id (=nome) antes de importar; se o import falhar,
  *    reenviar vira update idempotente (não duplica, pois o id é o nome).
+ *  - VÍNCULO EXPLÍCITO: quando o record já existe lá (equipe digitou à mão), o
+ *    envio só passa se o usuário confirmar que é a mesma pessoa (vincularExistente).
  * Roda como o usuário logado → o trigger de auditoria registra quem exportou.
+ *
+ * IMPORTANTE — POR QUE NADA AQUI FAZ `throw` PRA FORA:
+ * o Next REDIGE a mensagem de qualquer erro lançado numa Server Action em
+ * produção ("An error occurred in the Server Components render…"), então toda a
+ * explicação cuidadosa virava um texto genérico e inútil na tela. Estas actions
+ * devolvem `{ ok: false, erro }` pra mensagem chegar inteira no usuário.
  */
+
+/** Erro de fluxo com mensagem que PODE ser mostrada ao usuário. */
+class ErroExport extends Error {
+  /** record_id real já existente no REDCap (quando o bloqueio foi por isso). */
+  readonly jaExiste?: string;
+  constructor(mensagem: string, jaExiste?: string) {
+    super(mensagem);
+    this.jaExiste = jaExiste;
+  }
+}
+
+function mensagemDe(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message;
+  return "Erro inesperado no envio. Tente de novo; se persistir, avise o suporte.";
+}
 
 async function carregar(pacienteId: string) {
   const supabase = createClient();
@@ -76,7 +99,17 @@ export type PreviewExport = {
   semNome: boolean;
   /** Valores implausíveis (ex.: exame trocado) — envio pede confirmação. */
   suspeitos: SuspeitoExport[];
+  /**
+   * record_id REAL já existente no REDCap equivalente a este nome (legado /
+   * digitado à mão pela equipe) e que ainda NÃO é nosso. Enviar exige que o
+   * usuário confirme o vínculo. null = nome inédito lá, criação limpa.
+   */
+  existenteNoRedcap: string | null;
+  /** true = não deu pra consultar o REDCap agora; a checagem real roda no envio. */
+  checagemExistenciaFalhou: boolean;
 };
+
+export type PreviewResposta = { ok: true; preview: PreviewExport } | { ok: false; erro: string };
 
 /** Varre as coletas e junta os valores fora de faixa, com a origem. */
 function coletarSuspeitos(coletas: ColetaParaExport[]): SuspeitoExport[] {
@@ -96,13 +129,21 @@ const CTRL = new Set([
   "redcap_repeat_instance",
 ]);
 
-/** Monta o que SERIA enviado, sem enviar nada (dry-run / prévia). Offline-safe. */
-export async function previewExportRedcap(pacienteId: string): Promise<PreviewExport> {
+/** Monta o que SERIA enviado, sem enviar nada (dry-run / prévia). */
+export async function previewExportRedcap(pacienteId: string): Promise<PreviewResposta> {
+  try {
+    return { ok: true, preview: await montarPreview(pacienteId) };
+  } catch (err) {
+    return { ok: false, erro: mensagemDe(err) };
+  }
+}
+
+async function montarPreview(pacienteId: string): Promise<PreviewExport> {
   const { pac, coletas } = await carregar(pacienteId);
   // Espelha o gate do envio: a prévia não deve montar nada pra paciente não
   // habilitado (defesa em profundidade — a UI já esconde o botão).
   if (!pac.redcap_export_habilitado) {
-    throw new Error("Este paciente não está habilitado para exportação ao REDCap.");
+    throw new ErroExport("Este paciente não está habilitado para exportação ao REDCap.");
   }
   // "criando" = primeiro envio ainda não concluído (verdade: redcap_exportado_em).
   const criando = !pac.redcap_exportado_em;
@@ -121,6 +162,20 @@ export async function previewExportRedcap(pacienteId: string): Promise<PreviewEx
     0,
   );
 
+  // Avisa ANTES do clique que o nome já existe lá (caso comum: a equipe digitou
+  // o paciente à mão no REDCap). Rede pode falhar — degrada sem quebrar a prévia,
+  // já que a checagem que de fato barra o envio roda na hora do envio.
+  let existenteNoRedcap: string | null = null;
+  let checagemExistenciaFalhou = false;
+  if (criando && redcapConfigurado()) {
+    try {
+      const achado = await recordExisteCanon(recordId);
+      existenteNoRedcap = achado && achado !== pac.redcap_id ? achado : null;
+    } catch {
+      checagemExistenciaFalhou = true;
+    }
+  }
+
   return {
     configurado: redcapConfigurado(),
     habilitado: Boolean(pac.redcap_export_habilitado),
@@ -135,6 +190,8 @@ export async function previewExportRedcap(pacienteId: string): Promise<PreviewEx
     semDados: coletas.length === 0,
     semNome: criando && !nome,
     suspeitos: coletarSuspeitos(coletas),
+    existenteNoRedcap,
+    checagemExistenciaFalhou,
   };
 }
 
@@ -168,7 +225,7 @@ async function claimCriacao(
     .is("redcap_id", null)
     .select("id");
   if (error) {
-    throw new Error(
+    throw new ErroExport(
       `Falha ao reservar o envio — já existe outro paciente no site com nome equivalente a "${recordId}" (mesmo acento/caixa) vinculado ao REDCap. Confira se não é a mesma pessoa. (${error.message})`,
     );
   }
@@ -177,36 +234,66 @@ async function claimCriacao(
 
 export type EnvioResult = { recordId: string; criou: boolean; registros: number };
 
-/** Envia de fato pro REDCap (só este paciente). */
+export type EnvioResposta =
+  | ({ ok: true } & EnvioResult)
+  /** jaExiste = record_id real no REDCap; a UI usa pra oferecer o vínculo. */
+  | { ok: false; erro: string; jaExiste?: string };
+
+export type EnvioOpts = {
+  confirmarSuspeitos?: boolean;
+  /**
+   * record_id que JÁ existe no REDCap e que o usuário confirmou ser a mesma
+   * pessoa. Precisa bater exatamente com o que a checagem encontrar na hora do
+   * envio — senão o vínculo é recusado (o REDCap pode ter mudado no meio).
+   */
+  vincularExistente?: string;
+};
+
+/** Envia de fato pro REDCap (só este paciente). Nunca lança: devolve `ok:false`. */
 export async function enviarParaRedcap(
   pacienteId: string,
-  opts: { confirmarSuspeitos?: boolean } = {},
-): Promise<EnvioResult> {
+  opts: EnvioOpts = {},
+): Promise<EnvioResposta> {
+  try {
+    return { ok: true, ...(await executarEnvio(pacienteId, opts)) };
+  } catch (err) {
+    return {
+      ok: false,
+      erro: mensagemDe(err),
+      ...(err instanceof ErroExport && err.jaExiste ? { jaExiste: err.jaExiste } : {}),
+    };
+  }
+}
+
+async function executarEnvio(pacienteId: string, opts: EnvioOpts): Promise<EnvioResult> {
   const { supabase, pac, coletas } = await carregar(pacienteId);
 
   if (!pac.redcap_export_habilitado) {
-    throw new Error(
+    throw new ErroExport(
       "Este paciente não está habilitado para exportação ao REDCap (o fluxo cobre só novas admissões; legados ficam intocados).",
     );
   }
-  if (coletas.length === 0) throw new Error("Este paciente não tem nenhuma coleta pra enviar.");
+  if (coletas.length === 0)
+    throw new ErroExport("Este paciente não tem nenhuma coleta pra enviar.");
 
   // Blindagem: valor fora da faixa plausível (ex.: exame trocado → hemácias
   // 0.0059, sódio 26). Não bloqueia de vez — exige confirmação explícita.
   const suspeitos = coletarSuspeitos(coletas);
   if (suspeitos.length > 0 && !opts.confirmarSuspeitos) {
     const lista = suspeitos.map((s) => `${s.rotulo} ${s.valor} (${s.tipo})`).join(", ");
-    throw new Error(
+    throw new ErroExport(
       `Valores suspeitos (fora da faixa plausível): ${lista}. Confira se não é outro exame — confirme o envio se estiver certo.`,
     );
   }
   if (!redcapConfigurado()) {
-    throw new Error("API do REDCap ainda não configurada (REDCAP_API_URL / REDCAP_API_TOKEN).");
+    throw new ErroExport(
+      "API do REDCap ainda não configurada (REDCAP_API_URL / REDCAP_API_TOKEN).",
+    );
   }
 
   const nome = normalizeNome(pac.nome);
   if (!nome) {
-    throw new Error(
+    throw new ErroExport(
       "O paciente está sem nome — no REDCap o record_id é o nome completo. Preencha o nome antes de exportar.",
     );
   }
@@ -215,13 +302,13 @@ export async function enviarParaRedcap(
   // Derivar de redcap_id deixaria a trava de existência ser pulada pra sempre
   // após um claim seguido de falha de import (I6-01).
   const criando = !pac.redcap_exportado_em;
-  const recordId = pac.redcap_id ?? nome;
+  let recordId = pac.redcap_id ?? nome;
   const primeiraCriacao = criando && !pac.redcap_id; // ainda não reservamos o nome
 
   // Defensivo: o fluxo assume record_id=nome (auto-numeração DESLIGADA).
   const proj = await getProjectInfo();
   if (proj.autonumber) {
-    throw new Error(
+    throw new ErroExport(
       "A auto-numeração de record está LIGADA no REDCap, mas este fluxo usa o NOME como record_id. Abortado por segurança — alinhe a configuração do projeto.",
     );
   }
@@ -235,40 +322,50 @@ export async function enviarParaRedcap(
       .select("nome, redcap_id")
       .not("redcap_id", "is", null)
       .neq("id", pacienteId);
-    if (oErr) throw new Error(`Erro checando duplicidade de nome: ${oErr.message}`);
+    if (oErr) throw new ErroExport(`Erro checando duplicidade de nome: ${oErr.message}`);
     const colisao = (outros ?? []).find((o) => canonNome(o.nome as string) === canon);
     if (colisao) {
-      throw new Error(
+      throw new ErroExport(
         `Já existe um paciente exportado com nome equivalente ("${colisao.nome}", record "${colisao.redcap_id}"). Confirme se é a mesma pessoa antes de exportar — pra não duplicar no REDCap.`,
       );
     }
   }
 
-  const records = coletasParaRegistros(recordId, coletas);
-  assertRecordIdUnico(records, recordId); // TRAVA: só este paciente
-
+  // A checagem de existência vem ANTES de montar os registros: ao vincular a um
+  // record já existente, é o id REAL de lá que manda (a grafia pode divergir da
+  // nossa — "José" vs "Jose") e ele precisa ir em todos os registros.
   if (criando) {
     // TRAVA DE EXISTÊNCIA CANÔNICA, re-checada a CADA tentativa não concluída:
     // nunca sobrescrever/duplicar um record que já existe — inclusive legado com
     // grafia divergente (acento/caixa), que o match exato deixaria passar. Se o
-    // existente NÃO for o que reservamos antes, aborta. Se é nosso (claim
-    // anterior, match exato), segue pro import idempotente.
+    // existente NÃO for o que reservamos antes, só passa com vínculo confirmado
+    // pelo usuário. Se é nosso (claim anterior, match exato), segue pro import
+    // idempotente.
     const existente = await recordExisteCanon(recordId);
     const ehNosso = existente !== null && existente === pac.redcap_id;
     if (existente && !ehNosso) {
-      throw new Error(
-        `Já existe um registro "${existente}" no REDCap equivalente a "${recordId}" — não vou sobrescrever (pode ser legado ou homônimo). Se for o mesmo paciente, cole "${existente}" no record_id dele; senão ajuste o nome.`,
-      );
+      // O vínculo confirmado tem que apontar pro MESMO record que achamos agora;
+      // se o REDCap mudou entre a prévia e o envio, recusa e pede reconferência.
+      if (opts.vincularExistente !== existente) {
+        throw new ErroExport(
+          `Já existe um registro "${existente}" no REDCap equivalente a "${recordId}" — não vou sobrescrever sozinho (pode ser legado, digitado à mão, ou homônimo). Se for a mesma pessoa, confirme o vínculo; senão ajuste o nome.`,
+          existente,
+        );
+      }
+      recordId = existente; // adota o id real de lá
     }
     if (!pac.redcap_id) {
       const reservou = await claimCriacao(supabase, pacienteId, recordId);
       if (!reservou) {
-        throw new Error(
+        throw new ErroExport(
           "Já há um envio em andamento pra este paciente (ou ele acabou de ser vinculado). Aguarde alguns segundos e tente de novo.",
         );
       }
     }
   }
+
+  const records = coletasParaRegistros(recordId, coletas);
+  assertRecordIdUnico(records, recordId); // TRAVA: só este paciente
 
   try {
     await importarRegistros(records);
@@ -287,7 +384,7 @@ export async function enviarParaRedcap(
     .eq("id", pacienteId);
   if (upErr) {
     await setStatus(supabase, pacienteId, "ERRO");
-    throw new Error(
+    throw new ErroExport(
       `Enviado ao REDCap, mas falhei ao salvar o status localmente: ${upErr.message}. Como o record_id é o nome, reenviar é seguro (não duplica) — tente de novo.`,
     );
   }

@@ -39,18 +39,32 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome, habilitado }: Pro
   const [preview, setPreview] = useState<PreviewExport | null>(null);
   const [carregandoPreview, setCarregandoPreview] = useState(false);
   const [confirmouSuspeitos, setConfirmouSuspeitos] = useState(false);
+  /** record_id que já existe no REDCap (da prévia ou revelado pelo envio). */
+  const [jaExiste, setJaExiste] = useState<string | null>(null);
+  const [confirmouVinculo, setConfirmouVinculo] = useState(false);
   const [enviando, startEnvio] = useTransition();
 
   useEffect(() => {
     if (!open) {
       setPreview(null);
       setConfirmouSuspeitos(false);
+      setJaExiste(null);
+      setConfirmouVinculo(false);
       return;
     }
     let vivo = true;
     setCarregandoPreview(true);
     previewExportRedcap(pacienteId)
-      .then((p) => vivo && setPreview(p))
+      .then((res) => {
+        if (!vivo) return;
+        if (!res.ok) {
+          toast.error("Não consegui montar a prévia", { description: res.erro });
+          setOpen(false);
+          return;
+        }
+        setPreview(res.preview);
+        setJaExiste(res.preview.existenteNoRedcap);
+      })
       .catch((err) => {
         if (vivo) {
           toast.error("Não consegui montar a prévia", { description: errMsg(err) });
@@ -70,7 +84,8 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome, habilitado }: Pro
       !preview.semDados &&
       !preview.semNome &&
       !enviando &&
-      (!temSuspeitos || confirmouSuspeitos),
+      (!temSuspeitos || confirmouSuspeitos) &&
+      (!jaExiste || confirmouVinculo),
   );
 
   if (!habilitado) {
@@ -90,7 +105,20 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome, habilitado }: Pro
   function handleEnviar() {
     startEnvio(async () => {
       try {
-        const res = await enviarParaRedcap(pacienteId, { confirmarSuspeitos: confirmouSuspeitos });
+        const res = await enviarParaRedcap(pacienteId, {
+          confirmarSuspeitos: confirmouSuspeitos,
+          ...(jaExiste && confirmouVinculo ? { vincularExistente: jaExiste } : {}),
+        });
+        if (!res.ok) {
+          // Bloqueio por record já existente: mostra a caixa de vínculo em vez de
+          // só reclamar — o usuário decide se é a mesma pessoa.
+          if (res.jaExiste) {
+            setJaExiste(res.jaExiste);
+            setConfirmouVinculo(false);
+          }
+          toast.error("Erro ao enviar", { description: res.erro });
+          return;
+        }
         toast.success(
           res.criou ? `Paciente criado no REDCap (id ${res.recordId})` : "Dados enviados ao REDCap",
           { description: `${res.registros} registro(s) enviado(s).` },
@@ -152,7 +180,9 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome, habilitado }: Pro
                 ) : (
                   <div className="rounded-md border border-hairline bg-paper-deep/40 p-3 space-y-1.5">
                     <p>
-                      {preview.criando ? (
+                      {jaExiste ? (
+                        <span className="text-amber-700 font-medium">↻ Vai preencher o registro já existente &ldquo;{jaExiste}&rdquo; (precisa confirmar o vínculo abaixo).</span>
+                      ) : preview.criando ? (
                         <span className="text-cobalt font-medium">➕ Vai criar o registro &ldquo;{preview.recordId}&rdquo; no REDCap.</span>
                       ) : (
                         <span className="text-moss font-medium">↻ Vai atualizar o registro &ldquo;{preview.recordIdAtual}&rdquo;.</span>
@@ -168,13 +198,52 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome, habilitado }: Pro
                         Eventos: {preview.eventos.map((e) => EVENTO_LABEL[e] ?? e).join(", ")}
                       </p>
                     )}
-                    {preview.criando && (
+                    {preview.criando && !jaExiste && (
                       <p className="text-[11px] text-ash">
                         Se já existir um registro com esse nome no REDCap, o envio é bloqueado
                         automaticamente (não sobrescreve).
                       </p>
                     )}
                   </div>
+                )}
+
+                {jaExiste && (
+                  <div className="space-y-2 rounded-md border border-amber-400/50 bg-amber-50/60 p-3 text-[12px]">
+                    <p className="flex items-center gap-1.5 font-medium text-amber-700">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      Esse nome já existe no REDCap
+                    </p>
+                    <p className="text-graphite">
+                      Já há o registro <strong className="text-ink">&ldquo;{jaExiste}&rdquo;</strong> lá
+                      — provavelmente digitado à mão pela equipe. Pra não sobrescrever ninguém por
+                      engano, o envio só segue se você confirmar que é <strong className="text-ink">a
+                      mesma pessoa</strong>.
+                    </p>
+                    <p className="text-graphite">
+                      Ao vincular: nada é apagado no REDCap, mas os campos que temos aqui{" "}
+                      <strong className="text-ink">substituem</strong> o que estiver preenchido lá
+                      (ex.: o nome do ligante de cada seguimento). O que só existe no REDCap fica
+                      intacto.
+                    </p>
+                    <label className="flex items-start gap-2 pt-1 cursor-pointer">
+                      <Checkbox
+                        checked={confirmouVinculo}
+                        onCheckedChange={(v) => setConfirmouVinculo(v === true)}
+                        className="mt-0.5"
+                      />
+                      <span className="text-graphite">
+                        É a mesma pessoa — <strong className="text-ink">vincular</strong> a este
+                        paciente e atualizar o registro existente.
+                      </span>
+                    </label>
+                  </div>
+                )}
+
+                {preview.checagemExistenciaFalhou && (
+                  <p className="text-[12px] text-ash">
+                    Não deu pra conferir agora se esse nome já existe no REDCap — a checagem roda de
+                    novo no envio e bloqueia se existir.
+                  </p>
                 )}
 
                 {temSuspeitos && (
