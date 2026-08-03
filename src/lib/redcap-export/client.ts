@@ -124,6 +124,30 @@ export async function recordExisteCanon(recordId: string): Promise<string | null
   return canonMatch;
 }
 
+/**
+ * Exporta TODAS as linhas de UM record (flat, todos os campos). Read-only —
+ * usado só pra mostrar ao usuário o que seria substituído antes de vincular a um
+ * registro que já existe lá. Restrito ao record pedido.
+ */
+export async function exportarRecord(recordId: string): Promise<Array<Record<string, string>>> {
+  const { status, text } = await postForm({
+    content: "record",
+    action: "export",
+    type: "flat",
+    "records[0]": recordId,
+  });
+  if (status < 200 || status >= 300) {
+    throw new Error(`REDCap (exportar record) falhou (${status}): ${text.slice(0, 300)}`);
+  }
+  let rows: unknown;
+  try {
+    rows = JSON.parse(text);
+  } catch {
+    throw new Error(`Resposta inesperada do REDCap (exportar record): ${text.slice(0, 200)}`);
+  }
+  return Array.isArray(rows) ? (rows as Array<Record<string, string>>) : [];
+}
+
 export type ImportResult = { count: number };
 
 /**

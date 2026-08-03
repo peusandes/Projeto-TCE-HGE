@@ -19,6 +19,7 @@ import {
   enviarParaRedcap,
   type PreviewExport,
 } from "@/app/(app)/pacientes/[id]/redcap-actions";
+import type { DiffExport } from "@/lib/redcap-export/diff";
 import { errMsg } from "@/lib/utils";
 
 type Props = {
@@ -41,6 +42,8 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome, habilitado }: Pro
   const [confirmouSuspeitos, setConfirmouSuspeitos] = useState(false);
   /** record_id que já existe no REDCap (da prévia ou revelado pelo envio). */
   const [jaExiste, setJaExiste] = useState<string | null>(null);
+  /** O que o envio faria naquele registro (preenche / substitui). */
+  const [diff, setDiff] = useState<DiffExport | null>(null);
   const [confirmouVinculo, setConfirmouVinculo] = useState(false);
   const [enviando, startEnvio] = useTransition();
 
@@ -49,6 +52,7 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome, habilitado }: Pro
       setPreview(null);
       setConfirmouSuspeitos(false);
       setJaExiste(null);
+      setDiff(null);
       setConfirmouVinculo(false);
       return;
     }
@@ -64,6 +68,7 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome, habilitado }: Pro
         }
         setPreview(res.preview);
         setJaExiste(res.preview.existenteNoRedcap);
+        setDiff(res.preview.diff);
       })
       .catch((err) => {
         if (vivo) {
@@ -114,6 +119,7 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome, habilitado }: Pro
           // só reclamar — o usuário decide se é a mesma pessoa.
           if (res.jaExiste) {
             setJaExiste(res.jaExiste);
+            setDiff(res.diff ?? null);
             setConfirmouVinculo(false);
           }
           toast.error("Erro ao enviar", { description: res.erro });
@@ -211,20 +217,100 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome, habilitado }: Pro
                   <div className="space-y-2 rounded-md border border-amber-400/50 bg-amber-50/60 p-3 text-[12px]">
                     <p className="flex items-center gap-1.5 font-medium text-amber-700">
                       <AlertTriangle className="h-4 w-4 shrink-0" />
-                      Esse nome já existe no REDCap
+                      Bloqueado: esse nome já existe no REDCap
                     </p>
                     <p className="text-graphite">
-                      Já há o registro <strong className="text-ink">&ldquo;{jaExiste}&rdquo;</strong> lá
-                      — provavelmente digitado à mão pela equipe. Pra não sobrescrever ninguém por
-                      engano, o envio só segue se você confirmar que é <strong className="text-ink">a
-                      mesma pessoa</strong>.
+                      No REDCap o <strong className="text-ink">record_id é o nome</strong>, e{" "}
+                      <strong className="text-ink">&ldquo;{jaExiste}&rdquo;</strong> já está lá —
+                      pode ser um registro digitado à mão pela equipe, um legado, ou um{" "}
+                      <strong className="text-ink">homônimo</strong> (outra pessoa). Enviar sem
+                      conferir sobrescreveria os dados de quem já está lá, por isso o envio parou
+                      aqui.
                     </p>
-                    <p className="text-graphite">
-                      Ao vincular: nada é apagado no REDCap, mas os campos que temos aqui{" "}
-                      <strong className="text-ink">substituem</strong> o que estiver preenchido lá
-                      (ex.: o nome do ligante de cada seguimento). O que só existe no REDCap fica
-                      intacto.
-                    </p>
+
+                    {diff ? (
+                      <div className="space-y-1.5">
+                        <p className="text-graphite">Se você vincular, este envio:</p>
+                        <ul className="space-y-0.5 list-disc pl-4 text-graphite">
+                          <li>
+                            preenche <strong className="text-ink">{diff.preenche}</strong> campo(s)
+                            que estão vazios lá;
+                          </li>
+                          <li>
+                            deixa <strong className="text-ink">{diff.iguais + diff.soFormato}</strong>{" "}
+                            campo(s) já iguais como estão
+                            {diff.soFormato > 0 && ` (${diff.soFormato} só mudam de escrita, tipo 21 e 21,0)`};
+                          </li>
+                          <li>
+                            <strong className={diff.substitui.length > 0 ? "text-vermillion" : "text-ink"}>
+                              substitui {diff.substitui.length} campo(s)
+                            </strong>{" "}
+                            que já têm um valor diferente lá;
+                          </li>
+                          {diff.mantidosLa > 0 && (
+                            <li>
+                              mantém <strong className="text-ink">{diff.mantidosLa}</strong> caixa(s)
+                              marcada(s) só no REDCap (o envio nunca desmarca).
+                            </li>
+                          )}
+                        </ul>
+
+                        {diff.datasDivergentes.length > 0 && (
+                          <div className="rounded border border-vermillion/50 bg-vermillion/[0.06] p-2 space-y-1">
+                            <p className="flex items-center gap-1.5 font-medium text-vermillion">
+                              <AlertTriangle className="h-4 w-4 shrink-0" />
+                              Cuidado: as datas dos seguimentos não batem
+                            </p>
+                            <p className="text-graphite">
+                              Em <strong className="text-ink">{diff.datasDivergentes.length}</strong>{" "}
+                              seguimento(s) o dia daqui cai numa data diferente da mesma instância
+                              lá. Isso quer dizer que a numeração dos seguimentos está{" "}
+                              <strong className="text-ink">deslocada</strong> entre os dois — vincular
+                              escreveria os dados de um dia por cima de outro dia. Confira antes de
+                              confirmar.
+                            </p>
+                            <ul className="list-disc pl-4 text-graphite">
+                              {diff.datasDivergentes.map((c) => (
+                                <li key={`data-${c.onde}`}>
+                                  {c.onde}: lá está <strong className="text-ink">{c.atual}</strong>,
+                                  aqui <strong className="text-ink">{c.novo}</strong>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {diff.substitui.length > 0 && (
+                          <div className="rounded border border-hairline bg-paper/70">
+                            <p className="border-b border-hairline px-2 py-1 font-medium text-ink">
+                              O que seria substituído
+                            </p>
+                            <div className="max-h-52 overflow-y-auto divide-y divide-hairline">
+                              {diff.substitui.map((c) => (
+                                <div key={`${c.onde}-${c.campo}`} className="px-2 py-1.5">
+                                  <p className="text-ink">
+                                    {c.rotulo}{" "}
+                                    <span className="text-ash">· {c.onde}</span>
+                                  </p>
+                                  <p className="text-graphite">
+                                    <span className="text-vermillion line-through">{c.atual}</span>
+                                    {" → "}
+                                    <strong className="text-ink">{c.novo}</strong>
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-graphite">
+                        Não consegui listar agora o que seria alterado lá. Ao vincular, nada é
+                        apagado, mas os campos preenchidos aqui{" "}
+                        <strong className="text-ink">substituem</strong> os de lá.
+                      </p>
+                    )}
+
                     <label className="flex items-start gap-2 pt-1 cursor-pointer">
                       <Checkbox
                         checked={confirmouVinculo}
@@ -232,8 +318,8 @@ export function EnviarRedcapButton({ pacienteId, pacienteNome, habilitado }: Pro
                         className="mt-0.5"
                       />
                       <span className="text-graphite">
-                        É a mesma pessoa — <strong className="text-ink">vincular</strong> a este
-                        paciente e atualizar o registro existente.
+                        Conferi: é a mesma pessoa —{" "}
+                        <strong className="text-ink">vincular</strong> a este paciente e enviar.
                       </span>
                     </label>
                   </div>

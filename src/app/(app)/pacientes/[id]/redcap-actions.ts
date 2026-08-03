@@ -10,9 +10,11 @@ import {
 import {
   importarRegistros,
   recordExisteCanon,
+  exportarRecord,
   getProjectInfo,
   redcapConfigurado,
 } from "@/lib/redcap-export/client";
+import { compararComRedcap, type DiffExport } from "@/lib/redcap-export/diff";
 import { normalizeNome, canonNome } from "@/lib/redcap-export/nome";
 import { checarDados, type ValorSuspeito } from "@/lib/redcap-schema/plausibilidade";
 
@@ -43,9 +45,12 @@ import { checarDados, type ValorSuspeito } from "@/lib/redcap-schema/plausibilid
 class ErroExport extends Error {
   /** record_id real já existente no REDCap (quando o bloqueio foi por isso). */
   readonly jaExiste?: string;
-  constructor(mensagem: string, jaExiste?: string) {
+  /** O que este envio faria naquele registro — pra UI mostrar antes de vincular. */
+  readonly diff?: DiffExport;
+  constructor(mensagem: string, jaExiste?: string, diff?: DiffExport) {
     super(mensagem);
     this.jaExiste = jaExiste;
+    this.diff = diff;
   }
 }
 
@@ -107,6 +112,11 @@ export type PreviewExport = {
   existenteNoRedcap: string | null;
   /** true = não deu pra consultar o REDCap agora; a checagem real roda no envio. */
   checagemExistenciaFalhou: boolean;
+  /**
+   * Comparação campo a campo com o registro que já está no REDCap — o que este
+   * envio preencheria e o que SUBSTITUIRIA. Só quando `existenteNoRedcap`.
+   */
+  diff: DiffExport | null;
 };
 
 export type PreviewResposta = { ok: true; preview: PreviewExport } | { ok: false; erro: string };
@@ -167,10 +177,17 @@ async function montarPreview(pacienteId: string): Promise<PreviewExport> {
   // já que a checagem que de fato barra o envio roda na hora do envio.
   let existenteNoRedcap: string | null = null;
   let checagemExistenciaFalhou = false;
+  let diff: DiffExport | null = null;
   if (criando && redcapConfigurado()) {
     try {
       const achado = await recordExisteCanon(recordId);
       existenteNoRedcap = achado && achado !== pac.redcap_id ? achado : null;
+      if (existenteNoRedcap) {
+        // Os registros que confrontamos são os que de fato iriam (com o id REAL
+        // de lá), senão o diff mentiria sobre o payload do vínculo.
+        const doVinculo = coletasParaRegistros(existenteNoRedcap, coletas);
+        diff = compararComRedcap(doVinculo, await exportarRecord(existenteNoRedcap));
+      }
     } catch {
       checagemExistenciaFalhou = true;
     }
@@ -192,6 +209,7 @@ async function montarPreview(pacienteId: string): Promise<PreviewExport> {
     suspeitos: coletarSuspeitos(coletas),
     existenteNoRedcap,
     checagemExistenciaFalhou,
+    diff,
   };
 }
 
@@ -237,7 +255,7 @@ export type EnvioResult = { recordId: string; criou: boolean; registros: number 
 export type EnvioResposta =
   | ({ ok: true } & EnvioResult)
   /** jaExiste = record_id real no REDCap; a UI usa pra oferecer o vínculo. */
-  | { ok: false; erro: string; jaExiste?: string };
+  | { ok: false; erro: string; jaExiste?: string; diff?: DiffExport };
 
 export type EnvioOpts = {
   confirmarSuspeitos?: boolean;
@@ -261,6 +279,7 @@ export async function enviarParaRedcap(
       ok: false,
       erro: mensagemDe(err),
       ...(err instanceof ErroExport && err.jaExiste ? { jaExiste: err.jaExiste } : {}),
+      ...(err instanceof ErroExport && err.diff ? { diff: err.diff } : {}),
     };
   }
 }
@@ -347,9 +366,24 @@ async function executarEnvio(pacienteId: string, opts: EnvioOpts): Promise<Envio
       // O vínculo confirmado tem que apontar pro MESMO record que achamos agora;
       // se o REDCap mudou entre a prévia e o envio, recusa e pede reconferência.
       if (opts.vincularExistente !== existente) {
+        // Junto do bloqueio, mostra o que este envio faria lá. Best-effort: se a
+        // consulta falhar, o bloqueio continua valendo (só sem o detalhamento).
+        let diff: DiffExport | undefined;
+        try {
+          diff = compararComRedcap(
+            coletasParaRegistros(existente, coletas),
+            await exportarRecord(existente),
+          );
+        } catch {
+          /* segue sem o diff */
+        }
+        const resumo = diff
+          ? ` Se vincular: ${diff.preenche} campo(s) vazio(s) lá seriam preenchidos e ${diff.substitui.length} campo(s) já preenchido(s) seriam substituídos pelos daqui.`
+          : "";
         throw new ErroExport(
-          `Já existe um registro "${existente}" no REDCap equivalente a "${recordId}" — não vou sobrescrever sozinho (pode ser legado, digitado à mão, ou homônimo). Se for a mesma pessoa, confirme o vínculo; senão ajuste o nome.`,
+          `O record_id no REDCap é o nome, e "${existente}" já existe lá — pode ser um registro digitado à mão pela equipe, um legado, ou um homônimo (outra pessoa). Por isso o envio não segue sozinho: se for homônimo, sobrescreveria dados de outro paciente.${resumo} Se for a mesma pessoa, confirme o vínculo abaixo.`,
           existente,
+          diff,
         );
       }
       recordId = existente; // adota o id real de lá
